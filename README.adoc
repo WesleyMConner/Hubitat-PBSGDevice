@@ -1,0 +1,6 @@
+= The "Pushbutton Switches" Application
+:table-caption!:
+:example-caption!:
+:description: Code repository for the *PushbuttonSwitches* Hubitat application.
+:keywords: mutually-exclusive, pushbutton, switches, hubitat
+:imagesdir: images
