@@ -1,6 +1,88 @@
-= The "Pushbutton Switches" Application
-:table-caption!:
-:example-caption!:
-:description: Code repository for the *PushbuttonSwitches* Hubitat application.
-:keywords: mutually-exclusive, pushbutton, switches, hubitat
+//cSpell:words dotfile, dotfiles imagesdir prefs
 :imagesdir: images
+:dev-app: https://docs2.hubitat.com/developer/app/overview["custom Hubitat Application", window=read-ref,opts=”noopener,nofollow”]
+:capability-list: https://docs2.hubitat.com/developer/driver/capability-list["Capability List"], window=read-ref,opts=”noopener,nofollow”]
+
+= Pushbutton Switches
+
+*Pushbutton Switches* functionality is a https://docs2.hubitat.com/developer/app/overview["_custom Hubitat Application_", window=read-ref,opts=”noopener,nofollow”] delivered in two components.
+
+====
+PushbuttonSwitches.groovy:: A Hubitat *Parent App* which DOES NOT enforce application behavior, but DOES collects child instances visually in the Hubitat GUI.
+
+PushbuttonSwitchInstance.groovy:: A Hubitat *Child App* which implements core behavior - "_mutual exclusion_", "_default switch_" (optional).
+====
+
+== Mutual Exclusion
+The primary focus of a *PushbuttonSwitchInstance* is to collect a group of devices (which implement the "_Switch_" capability, see https://docs2.hubitat.com/developer/driver/capability-list["Capability List", window=read-ref,opts=”noopener,nofollow”]) and ensure that only one device is "on" at a time.
+
+.Pushbutton Switch Example
+Old car radios are a great example of a simple pushbutton switch group. A single button is enabled at any one time. When a new station is enabled, all other stations are disabled.
+
+image::pushbutton-car-radio.jpg[AM Pushbutton Car Radio,300,align="center"]
+
+.Mutual-Exclusion Example
+Given::
+* Four devices are added to a *PushButton Switch* instance, with initial state: +
+`switch1` - _off_ +
+`dimmer27` - _off_ +
+`switch18` - _off_ +
+`virtualSwitch2` - *on*
+Event 0::
+* `dimmer27` is turned "on" (_by whatever means_)
+* The *Pushbutton Switch* instance enforces mutual exclusion.
+* The resulting switch states are: +
+`switch1` - _off_ +
+`dimmer27` - *on* +
+`switch18` - _off_ +
+`virtualSwitch2` - _off_
+
+== Default Switch Option
+Optionally, a *PushButton Switch* instance can identify one participating switch as the *Default Switch*. If all switches in a *Pushbutton Switch* instance are turned "off", the *Default Switch* is automatically turned on.
+
+.Default Switch Example
+Given::
+* Five devices are added to a *PushButton Switch* instance: +
+`switch10`, `switch12`, `dimmer3`, `dimmer8` and `switch15`.
+* `dimmer8` is selected as the *Default Switch*.
+* Initially switch states are: +
+`switch10` - _off_ +
+`switch12` - *on* +
+`dimmer3` - _off_ +
+`dimmer8` (_default_) - _off_ +
+`switch15` - _off_
+Event 1::
+* `switch10` is turned "on" (_by whatever means_)
+* The *Pushbutton Switch* takes no automatic action.
+* The resulting switch states are: +
+`switch10` - *on* +
+`switch12` - _off_ +
+`dimmer3` - _off_ +
+`dimmer8` (_default_) - _off_ +
+`switch15` - _off_
+Event 2::
+* `switch10` is turned "off" (_by whatever means_)
+* The *Pushbutton Switch* enables the *Default Switch*.
+* The resulting switch states are: +
+`switch10` - _off_ +
+`switch12` - _off_ +
+`dimmer3` - _off_ +
+`dimmer8` (_default_) - *on* +
+`switch15` - _off_
+
+== Example Use Cases
+
+=== Mode Selection using Virtual Switches
+Hubitat Modes are mutual exclusive by their nature.
+
+Modes can be adjusted externally (using Amazon Alexa, Google Assistant, ...) by:
+
+* Associating each mode with a *Hubitat Virtual Switch*
+* Changing modes via the associated virtual switches exclusively.
+* Using rules (or a *Pushbutton Switch* instance) to ensure a single mode switch is enabled at a time.
+* Exposing the mode virtual switches externally.
+
+=== Room Lighting Scene Selection
+While the built-in *Room Lighting* application can facilitate per-room scene creation, it does not ensure a single scene is operating per room at any one time.
+
+A per-room *Pushbutton Switch* instance can be used as the basis for developing mutually-exclusive per-room scenes.
