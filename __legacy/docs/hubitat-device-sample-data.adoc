@@ -1,0 +1,109 @@
+:table-caption!:
+
+= com.hubitat.app.DeviceWrapper
+
+== Navigating Nested DeviceWrapper Data
+
+. Three Ways of Accessing the Same Data
+[source, groovy]
+----
+  defaultSwitch.getProperties()['unwrappedDevice']['id']
+  defaultSwitch.getProperties().unwrappedDevice.id
+  defaultSwitch.unwrappedDevice.id 
+----
+
+== Available DeviceWrapper Data
+
+Clients identify the participating _switches_ when creating a *Pushbutton Application*
+instance.
+
+Inside the application, device details are provided via the generic device class
+`com.hubitat.hub.domain.Device`.
+
+[%autowidth, frame="none", grid="none", cols=">30,<70"]
+|===
+|*defaultSwitch* |A single `com.hubitat.hub.domain.Device` instance.
+|*swGroup* |A Groovy `List` of `com.hubitat.hub.domain.Device` instances.
+|===
+
+Inside the application, device data is communicated via `com.hubitat.app.DeviceWrapper`
+instances. The following sample data was probed using `device.getProperties()`.
+
+. Sample Generic Device Data
+[source, groovy]
+----
+  currentStates: [
+    com.hubitat.hub.domain.State@180eb0d[
+      dataType=ENUM,
+      date=Mon Jul 03 19:24:22 EDT 2023,
+      deviceId=5771,
+      id=,
+      name=switch,
+      unit=,
+      value=on
+    ]
+  ],
+  driverId:51,
+  isComponent:false,
+  zigbeeId:,
+  roomName:null,
+  hub:PHarbor(new),
+  id:5771,
+  unwrappedDevice: [
+    id: 5771,  <--------------------------------------------- Unique Device Identifier
+    name: A4,
+    label: A4,
+    deviceNetworkId: af7aab47-445c-4eca-bdcf-55840cf453b8,
+    hubId: 1,
+    parentDeviceId: null,
+    isComponent: null,
+    displayAsChild: null,
+    locationId: 1,
+    deviceTypeId: 51,
+    zigbeeId: ,
+    lanId: null,
+    driverType: sys,
+    linkedDevice: false
+  ],
+  supportedCommands: [off, on, refresh],  <------------------ Switches have on() and off() 
+  lanId:null,
+  endpointId:null,
+  singleThreaded:false,
+  controllerType:null,
+  displayAsChild:null,
+  name:A4,
+  capabilities:[Switch, Refresh],
+  device:[
+    id: 5771,
+    name: A4,
+    label: A4,
+    deviceNetworkId: af7aab47-445c-4eca-bdcf-55840cf453b8,
+    hubId: 1,
+    parentDeviceId: null,
+    isComponent: null,
+    displayAsChild: null,
+    locationId: 1,
+    deviceTypeId: 51,
+    zigbeeId: ,
+    lanId: null,
+    driverType: sys,
+    linkedDevice: false
+  ],
+  idAsLong:5771,
+  parentAppId:null,
+  class:class com.hubitat.app.DeviceWrapper,
+  disabled:false,
+  status:ACTIVE,
+  typeName:Virtual Switch,
+  linkedDevice:false,
+  driverType:sys,
+  label:A4,
+  data:[:],
+  supportedAttributes:[switch],
+  deviceNetworkId:af7aab47-445c-4eca-bdcf-55840cf453b8,
+  lastActivity:2023-07-03 23:24:22+0000,
+  roomId:0,
+  parentDeviceId:null,
+  displayName:A4
+]
+----

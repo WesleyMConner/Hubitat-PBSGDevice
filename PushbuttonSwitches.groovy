@@ -15,6 +15,8 @@
 // limitations under the License.
 // ---------------------------------------------------------------------------------
 
+#include wesmc.UtilsLibrary
+
 definition(
   name: "Pushbutton Switches",
   namespace: 'wesmc',
@@ -27,44 +29,11 @@ definition(
   singleInstance: true
 )
 
-// ---------------------------------------------------------------------
-// F U N C T I O N S   U S E D   I N   C L I E N T   I N T E R F A C E S
-// ---------------------------------------------------------------------
-BLACK = 'rgba(0, 0, 0, 1.0)'
-BLUE = 'rgba(51, 92, 255, 1.0)'
-LIGHT_GREY = 'rgba(180, 180, 180, 1.0)'
-RED = 'rgba(51, 51, 51, 1.0)'
-
 // -------------------------------
 // C L I E N T   I N T E R F A C E
 // -------------------------------
 preferences {
   page name: "monoPage", title: "", install: true, uninstall: true
-}
-
-String heading(String s) {
-  HEADING_CSS = "font-size: 2em; font-weight: bold;"
-  return """<span style="${HEADING_CSS}">${s}</span>"""
-}
-
-String emphasis(String s) {
-  EMPHASIS_CSS = "font-size: 1.3em; color: ${BLUE}; margin-left: 20px;"
-  return """<br/><span style="${EMPHASIS_CSS}">${s}</span><br/>"""
-}
-
-String normal(String s) {
-  NORMAL_CSS = "font-size: 1.1em;"
-  return """<span style="${NORMAL_CSS}">${s}</span>"""
-}
-
-String bullet(String s) {
-  BULLET_CSS = "font-size: 1em; margin-left: 20px;"
-  return """<span style="${BULLET_CSS}">&#x2022;&nbsp;&nbsp;${s}</span>"""
-}
-
-String comment(String s) {
-  COMMENT_CSS = "font-size: 0.8em; color: ${LIGHT_GREY}"
-  return """<span style="${COMMENT_CSS}">${s}</span>"""
 }
 
 Map monoPage() {
@@ -78,7 +47,7 @@ Map monoPage() {
           bullet('This <em>parent application</em> will be installed.'),
           bullet('The parent groups <b>Pushbutton Switch Instances</b> (children) together.')
         ].join('\n'))
-      } 
+      }
     } else {
       section {
         paragraph '<span style="font-size: 2em; font-weight: bold;">Pushbutton Switches</span>'

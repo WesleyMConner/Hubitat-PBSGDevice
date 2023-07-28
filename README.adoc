@@ -5,7 +5,7 @@
 
 = Pushbutton Switches
 
-*Pushbutton Switches* functionality is a https://docs2.hubitat.com/developer/app/overview["_custom Hubitat Application_", window=read-ref,opts=”noopener,nofollow”] delivered in two components.
+*Pushbutton Switches* is a https://docs2.hubitat.com/developer/app/overview["_custom Hubitat Application_", window=read-ref,opts=”noopener,nofollow”] delivered in two components.
 
 ====
 PushbuttonSwitches.groovy:: A Hubitat *Parent App* which DOES NOT enforce application behavior, but DOES collects child instances visually in the Hubitat GUI.

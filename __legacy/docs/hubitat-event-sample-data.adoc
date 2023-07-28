@@ -1,0 +1,51 @@
+:table-caption!:
+
+= Available Information on Events
+
+Application instances subscribe to Events - e.g., a switch turning "on" or turning "off".
+
+Event details are provided via the generic event class `com.hubitat.hub.domain.Event`
+The following sample data was probed using `event.getProperties()`.
+
+.Sample Generic Event Data
+[source, groovy]
+----
+[
+  floatValue: 0.0,
+  digital: false,
+  locationId: null,
+  date: Mon Jul 03 19:50:03 EDT 2023,
+  id: 6112129, <----------------------------------------- Event Id (not used here)
+  dateValue: null,
+  hubId: null,
+  location: PHarbor(new),
+  descriptionText: A4 was turned off,
+  archivable: true,
+  isStateChange: true, <--------------------------------- Subscribed Event
+  class: class com.hubitat.hub.domain.Event,
+  numericValue: null,
+  integerValue: 0,
+  source: DEVICE,
+  displayName: A4,
+  deviceId: 5771, <-------------------------------------- Device Id (unique Device ID)
+  unixTime: 1688428203632,
+  jsonData: [:],
+  triggeredListeners: null,
+  numberValue: null,
+  doubleValue: 0.0,
+  name: switch,
+  physical: false,
+  device: A4,
+  value: off, <------------------------------------------ Current (new) value
+  translatable: false,
+  type: null,
+  installedAppId: null,
+  unit: null,
+  longValue: 0,
+  displayed: true,
+  data: null,
+  description: null,
+  producedBy: null,
+  linkText: A4
+]
+----
