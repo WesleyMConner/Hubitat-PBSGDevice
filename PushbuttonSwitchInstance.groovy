@@ -101,11 +101,18 @@ Map monoPage() {
           required: true,
           options: picklist
         )
-      } else {
-        // The client MAY select and subsequently de-select 'useDefault'.
-        // Remove any prior 'defaultSwitchId' entry for consistency. 
-        app.removeSetting('defaultSwitchId')
       }
+      // The client MAY select and subsequently de-select 'useDefault'.
+      // Remove any prior 'defaultSwitchId' entry for consistency.
+      app.removeSetting('defaultSwitchId')
+      input (
+        name: 'exit',
+        type: 'bool',
+        title: 'Enable to EXIT',
+        submitOnChange: true,
+        required: true,
+        defaultValue: false
+      )
     }
   }
 }
@@ -276,7 +283,7 @@ void buttonHandler (Event e) {
     switch(e.value) {
       case 'on':
         // Turn off peers in switch group.
-        getOnSwitches().each({ sw -> 
+        getOnSwitches().each({ sw ->
           if (sw.id != eventDevice.id) {
             if (settings.LOG) log.trace "buttonHandler() turning off ${deviceTag(sw)}."
             sw.off()
@@ -289,7 +296,7 @@ void buttonHandler (Event e) {
       default:
         log.error  "buttonHandler() expected 'on' or 'off'; but, \
           received '${e.value}'."
-    }  
+    }
   } else {
     // Report this condition as an ERROR and explore further IF it occurs.
     logSettingsAndState('buttonHandler()', true)
