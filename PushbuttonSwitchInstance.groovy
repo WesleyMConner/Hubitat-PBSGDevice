@@ -101,18 +101,11 @@ Map monoPage() {
           required: true,
           options: picklist
         )
+      } else {
+        // The client MAY select and subsequently de-select 'useDefault'.
+        // Remove any prior 'defaultSwitchId' entry for consistency.
+        app.removeSetting('defaultSwitchId')
       }
-      // The client MAY select and subsequently de-select 'useDefault'.
-      // Remove any prior 'defaultSwitchId' entry for consistency.
-      app.removeSetting('defaultSwitchId')
-      input (
-        name: 'exit',
-        type: 'bool',
-        title: 'Enable to EXIT',
-        submitOnChange: true,
-        required: true,
-        defaultValue: false
-      )
     }
   }
 }
