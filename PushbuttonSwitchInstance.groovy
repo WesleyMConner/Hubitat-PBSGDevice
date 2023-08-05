@@ -14,10 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // ---------------------------------------------------------------------------------
-
 import com.hubitat.app.DeviceWrapper as DeviceWrapper
 import com.hubitat.app.DeviceWrapperList as DeviceWrapperList // YUCK!!!
 import com.hubitat.hub.domain.Event as Event
+#include wesmc.UtilsLibrary
 
 definition(
   parent: "wesmc:Pushbutton Switches",
@@ -49,13 +49,13 @@ Map monoPage() {
     // A single section block minimizes whitespace.
     section {
       paragraph(
-        parent.heading('Pushbutton Instance')
+        heading('Pushbutton Instance')
       )
       input (
         name: 'swGroupName',
         defaultValue: 'Pushbutton Group - ',
         type: 'text',
-        title: parent.emphasize('Name this <b>Pushbutton Switch</b> group'),
+        title: emphasis('Name this <b>Pushbutton Switch</b> group'),
         submitOnChange: true,
         required: true
       )
@@ -86,10 +86,6 @@ Map monoPage() {
         )
       }
       if (settings.useDefault) {
-        // The Default Switch is selected from swGroup. A Hubitat picklist
-        // (List<Map<KEY, VALUE>>) facilitates the selection.
-        //   VALUE: The option presented to the client .. (displayName)
-        //     KEY: The selected Device ................. (device Id)
         List<Map<String, String>> picklist = settings.swGroup
           .sort({ it.displayName })
           .collect({ [(it.id): it.displayName] })
@@ -120,7 +116,6 @@ String deviceTag(DeviceWrapper device) {
 
 void installed() {
   if (settings.LOG) log.trace 'installed()'
-  //--not-used-- unsubscribe()  // A D D E D   T O   D E B U G   I S S U E
   initialize()
 }
 
@@ -149,7 +144,7 @@ String showSwitchInfoWithState(
 ) {
   if (!devices) devices = settings.swGroup
   return devices.collect({
-    "${deviceTag(it)} ${emphasizeOn(extractSwitchState(it))}"
+    "${deviceTag(it)} ${emphasisOn(extractSwitchState(it))}"
   }).sort().join(delimiter) ?: 'N/A'
 }
 
@@ -215,60 +210,6 @@ void enforceMutualExclusion() {
   }
 }
 
-void logEventDetails (Event e, Boolean errorMode = false) {
-  if (settings.LOG || errorMode) {
-    String rows = """
-      <tr>
-        <th align='right'>descriptionText</th>
-        <td>${e.descriptionText}</td>
-      </tr>
-      <tr>
-        <th align='right'>deviceId</th>
-        <td>${e.deviceId}</td>
-      </tr>
-      <tr>
-        <th align='right'>displayName</th>
-        <td>${e.displayName}</td>
-      </tr>
-    """
-    if (errorMode) {
-      rows += """
-        <tr>
-          <th align='right'>isStateChange</th>
-          <td>${e.isStateChange}</td>
-        </tr>
-        <tr>
-          <th align='right'>date</th>
-          <td>${e.date}</td>
-        </tr>
-        <tr>
-          <th align='right'>class</th>
-          <td>${e.class}</td>
-        </tr>
-        <tr>
-          <th align='right'>unixTime</th>
-          <td>${e.unixTime}</td>
-        </tr>
-        <tr>
-          <th align='right'>name</th>
-          <td>${e.name}</td>
-        </tr>
-        <tr>
-          <th align='right'>value</th>
-          <td>${e.value}</td>
-        </tr>
-      """
-      log.error """Unexpected event in ${calledBy}:<br/>
-        Received an event that IS NOT a state change.<br/>
-        <table>${rows}</table>
-      """
-    } else {
-      log.trace """Event highlights from ${calledBy}:<br/>
-      <table>${rows}</table>"""
-    }
-  }
-}
-
 void buttonHandler (Event e) {
   if (e.isStateChange) {
     logSettingsAndState('buttonHandler()')
@@ -304,7 +245,7 @@ void initialize() {
   subscribe(settings.swGroup, "switch", buttonHandler)
 }
 
-String emphasizeOn(String s) {
+String emphasisOn(String s) {
   return s == 'on' ? '<b>on</b>' : "<em>${s}</em>"
 }
 
