@@ -15,7 +15,6 @@
 // limitations under the License.
 // ---------------------------------------------------------------------------------
 import com.hubitat.app.DeviceWrapper as DevW
-import com.hubitat.app.DeviceWrapperList as DevWL // YUCK!!!
 import com.hubitat.hub.domain.Event as Event
 #include wesmc.UtilsLibrary
 
@@ -136,7 +135,7 @@ String extractSwitchState(DevW d) {
 
 String showSwitchInfoWithState(
   String delimiter = ', ',
-  DevWL devices = null  // settings.swGroup is only available in fn body ?!
+  List<DevW> devices = null  // settings.swGroup is only available in fn body ?!
 ) {
   if (!devices) devices = settings.swGroup
   return devices.collect({
@@ -145,7 +144,7 @@ String showSwitchInfoWithState(
 }
 
 DevW getSwitchById(String id) {
-  DevWL devices = settings.swGroup
+  List<DevW> devices = settings.swGroup
   return devices?.find({ it.id == id })
 }
 
@@ -177,7 +176,7 @@ void logSettingsAndState(String calledBy) {
 }
 
 List<DevW> getOnSwitches() {
-  DevWL devices = settings.swGroup
+  List<DevW> devices = settings.swGroup
   return devices?.findAll({ extractSwitchState(it) == 'on' })
 }
 
