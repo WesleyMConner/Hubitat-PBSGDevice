@@ -2,17 +2,17 @@
 
 = com.hubitat.app.DeviceWrapper
 
-== Navigating Nested DeviceWrapper Data
+== Navigating Nested DevW Data
 
 . Three Ways of Accessing the Same Data
 [source, groovy]
 ----
   defaultSwitch.getProperties()['unwrappedDevice']['id']
   defaultSwitch.getProperties().unwrappedDevice.id
-  defaultSwitch.unwrappedDevice.id 
+  defaultSwitch.unwrappedDevice.id
 ----
 
-== Available DeviceWrapper Data
+== Available DevW Data
 
 Clients identify the participating _switches_ when creating a *Pushbutton Application*
 instance.
@@ -58,14 +58,14 @@ instances. The following sample data was probed using `device.getProperties()`.
     parentDeviceId: null,
     isComponent: null,
     displayAsChild: null,
-    locationId: 1,
+    LocId: 1,
     deviceTypeId: 51,
     zigbeeId: ,
     lanId: null,
     driverType: sys,
     linkedDevice: false
   ],
-  supportedCommands: [off, on, refresh],  <------------------ Switches have on() and off() 
+  supportedCommands: [off, on, refresh],  <------------------ Switches have on() and off()
   lanId:null,
   endpointId:null,
   singleThreaded:false,
@@ -82,7 +82,7 @@ instances. The following sample data was probed using `device.getProperties()`.
     parentDeviceId: null,
     isComponent: null,
     displayAsChild: null,
-    locationId: 1,
+    LocId: 1,
     deviceTypeId: 51,
     zigbeeId: ,
     lanId: null,

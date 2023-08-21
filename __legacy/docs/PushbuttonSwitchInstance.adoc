@@ -20,7 +20,7 @@
 |===
 | swGroupName |a String naming the Application instance
 | L |Boolean (used to enable/disable logging)
-| swGroup |a List<DeviceWrapper>
+| swGroup |a List<DevW>
 | useDefault |a Boolean
 | defaultSwitchId |a device Id (String) from swGroup (optional input)
 |===
@@ -28,7 +28,7 @@
 .atomicState
 [frame="none", grid="none", cols=">20h,<80"]
 |===
-|switches |Map<String, DeviceWrapper>
+|switches |Map<String, DevW>
 |===
 
 .Definitions
@@ -46,7 +46,7 @@
 ----
 //--not-used-- String showSwitchInfo(
 //--not-used--   String delimiter = ', ',
-//--not-used--   DeviceWrapperList devices = null  // settings.swGroup is only available in fn body ?!
+//--not-used--   DevWL devices = null  // settings.swGroup is only available in fn body ?!
 //--not-used-- ) {
 //--not-used--   if (!devices) devices = settings.swGroup
 //--not-used--   return devices.collect({ deviceTag(it) }).sort().join(delimiter) ?: 'N/A'

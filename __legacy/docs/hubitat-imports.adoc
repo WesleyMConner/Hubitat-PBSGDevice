@@ -2,11 +2,11 @@
 
 == Devices
 * https://docs2.hubitat.com/developer/device-object[device-object]
-** import com.hubitat.app.ChildDeviceWrapper
-** import com.hubitat.app.ParentDeviceWrapper
+** import com.hubitat.app.ChildDevW
+** import com.hubitat.app.ParentDevW
 * https://docs2.hubitat.com/developer/capability-object[capability-object]
-** import com.hubitat.app.DeviceWrapper as DeviceWrapper
-** import com.hubitat.app.DeviceWrapperList as DeviceWrapperList
+** import com.hubitat.app.DeviceWrapper as DevW
+** import com.hubitat.app.DeviceWrapperList as DevWL
 ** import com.hubitat.hub.domain.State as State
 
 == Events
@@ -29,8 +29,8 @@
 * https://docs2.hubitat.com/developer/hubaction-object[hubaction-object]
 * https://docs2.hubitat.com/developer/hubmultiaction-object[hubmultiaction-object]
 
-= Location
-* https://docs2.hubitat.com/developer/location-object[location-object]
+= Loc
+* https://docs2.hubitat.com/developer/Loc-object[Loc-object]
 ** import com.hubitat.hub.domain.Location
 
 = General Purpose

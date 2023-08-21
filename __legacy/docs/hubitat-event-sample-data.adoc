@@ -13,12 +13,12 @@ The following sample data was probed using `event.getProperties()`.
 [
   floatValue: 0.0,
   digital: false,
-  locationId: null,
+  LocId: null,
   date: Mon Jul 03 19:50:03 EDT 2023,
   id: 6112129, <----------------------------------------- Event Id (not used here)
   dateValue: null,
   hubId: null,
-  location: PHarbor(new),
+  Loc: PHarbor(new),
   descriptionText: A4 was turned off,
   archivable: true,
   isStateChange: true, <--------------------------------- Subscribed Event

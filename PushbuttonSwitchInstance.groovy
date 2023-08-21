@@ -14,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // ---------------------------------------------------------------------------------
-import com.hubitat.app.DeviceWrapper as DeviceWrapper
-import com.hubitat.app.DeviceWrapperList as DeviceWrapperList // YUCK!!!
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.DeviceWrapperList as DevWL // YUCK!!!
 import com.hubitat.hub.domain.Event as Event
 #include wesmc.UtilsLibrary
 
@@ -48,6 +48,7 @@ Map monoPage() {
   return dynamicPage(name: 'monoPage') {
     // A single section block minimizes whitespace.
     section {
+settings.LOG = true
       paragraph(
         heading('Pushbutton Instance')
       )
@@ -109,11 +110,6 @@ Map monoPage() {
 // ---------------------------------------------------
 // I N I T I A L I Z A T I O N   &   O P E R A T I O N
 // ---------------------------------------------------
-String deviceTag(DeviceWrapper device) {
-  if (!device) log.error 'deviceTag(device) called with null value.'
-  return "${device.displayName} (${device.id})"
-}
-
 void installed() {
   if (settings.LOG) log.trace 'installed()'
   initialize()
@@ -126,7 +122,7 @@ void updated() {
   initialize()
 }
 
-String extractSwitchState(DeviceWrapper d) {
+String extractSwitchState(DevW d) {
   // What's best here? NOT exhaustively tested.
   //   - stateValues = d.collect({ it.currentStates.value }).flatten()
   //   - stateValues = d.currentStates.value
@@ -140,7 +136,7 @@ String extractSwitchState(DeviceWrapper d) {
 
 String showSwitchInfoWithState(
   String delimiter = ', ',
-  DeviceWrapperList devices = null  // settings.swGroup is only available in fn body ?!
+  DevWL devices = null  // settings.swGroup is only available in fn body ?!
 ) {
   if (!devices) devices = settings.swGroup
   return devices.collect({
@@ -148,8 +144,8 @@ String showSwitchInfoWithState(
   }).sort().join(delimiter) ?: 'N/A'
 }
 
-DeviceWrapper getSwitchById(String id) {
-  DeviceWrapperList devices = settings.swGroup
+DevW getSwitchById(String id) {
+  DevWL devices = settings.swGroup
   return devices?.find({ it.id == id })
 }
 
@@ -180,18 +176,18 @@ void logSettingsAndState(String calledBy) {
   """
 }
 
-List<DeviceWrapper> getOnSwitches() {
-  DeviceWrapperList devices = settings.swGroup
+List<DevW> getOnSwitches() {
+  DevWL devices = settings.swGroup
   return devices?.findAll({ extractSwitchState(it) == 'on' })
 }
 
 void enforceDefault() {
   if (settings.LOG) log.trace 'enforceDefault()'
   if (settings.defaultSwitchId) {
-    List<DeviceWrapper> onDevices = getOnSwitches()
+    List<DevW> onDevices = getOnSwitches()
     if (onDevices.size() == 0) {
       logSettingsAndState('enforceDefault() triggered IN')
-      DeviceWrapper defaultSwitch = getSwitchById(settings.defaultSwitchId)
+      DevW defaultSwitch = getSwitchById(settings.defaultSwitchId)
       if (settings.LOG) log.trace "enforceDefault() turning on ${deviceTag(defaultSwitch)}."
       defaultSwitch.on()
       logSettingsAndState('enforceDefault() triggered OUT')
@@ -201,9 +197,9 @@ void enforceDefault() {
 
 void enforceMutualExclusion() {
   if (settings.LOG) log.trace 'enforceMutualExclusion()'
-  List<DeviceWrapper> onList = getOnSwitches()
+  List<DevW> onList = getOnSwitches()
   while (onList.size() > 1) {
-    DeviceWrapper device = onList.first()
+    DevW device = onList.first()
     if (settings.LOG) log.trace "enforceMutualExclusion() turning off ${deviceTag(device)}."
     device.off()
     onList = onList.drop(1)
@@ -213,7 +209,7 @@ void enforceMutualExclusion() {
 void buttonHandler (Event e) {
   if (e.isStateChange) {
     logSettingsAndState('buttonHandler()')
-    DeviceWrapper eventDevice = getSwitchById(e.deviceId.toString())
+    DevW eventDevice = getSwitchById(e.deviceId.toString())
     switch(e.value) {
       case 'on':
         // Turn off peers in switch group.

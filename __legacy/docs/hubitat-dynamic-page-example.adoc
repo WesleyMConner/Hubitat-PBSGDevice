@@ -115,7 +115,7 @@ String displayLightsTable() {
 	if(state.reset) {
 		def dev = lights.find{"$it.id" == state.reset}
 		state.lights[state.reset].start = dev.currentSwitch == "on" ? now() : 0
-		state.lights[state.reset].time = new Date().format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+		state.lights[state.reset].time = new Date().format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
 		state.lights[state.reset].total = 0
 		state.lights[state.reset].count = dev.currentSwitch == "on" ? 1 : 0
 		state.remove("reset")
@@ -134,7 +134,7 @@ String displayLightsTable() {
 		int total = state.lights["$dev.id"].total / 1000
 		String thisVar = state.lights["$dev.id"].var
         String count = state.lights["$dev.id"].count
-        String startstr = state.lights["$dev.id"].start ? new Date(state.lights["$dev.id"].start).format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}") : ""
+        String startstr = state.lights["$dev.id"].start ? new Date(state.lights["$dev.id"].start).format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}") : ""
 		int hours = total / 3600
 		total = total % 3600
 		int mins = total / 60
@@ -160,7 +160,7 @@ String displayContactsTable() {
 	if(state.contactreset) {
 		def dev = contacts.find{"$it.id" == state.contactreset}
 		state.contacts[state.contactreset].start = dev.currentContact == "open" ? now() : 0
-		state.contacts[state.contactreset].time = new Date().format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+		state.contacts[state.contactreset].time = new Date().format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
 		state.contacts[state.contactreset].total = 0
 		state.contacts[state.contactreset].count = dev.currentContact == "open" ? 1 : 0
 		state.remove("contactreset")
@@ -179,7 +179,7 @@ String displayContactsTable() {
 		int total = state.contacts["$dev.id"].total / 1000
 		String thisVar = state.contacts["$dev.id"].var
         String count = state.contacts["$dev.id"].count
-        String startstr = state.contacts["$dev.id"].start ? new Date(state.contacts["$dev.id"].start).format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}") : ""
+        String startstr = state.contacts["$dev.id"].start ? new Date(state.contacts["$dev.id"].start).format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}") : ""
 		int hours = total / 3600
 		total = total % 3600
 		int mins = total / 60
@@ -249,7 +249,7 @@ void initialize() {
 	subscribe(lights, "switch.on", "onHandler")
 	subscribe(lights, "switch.off", "offHandler")
 	if(resetVar) {
-		subscribe(location, "variable:${resetVar}.true", resetTimers)
+		subscribe(Loc, "variable:${resetVar}.true", resetTimers)
 		setGlobalVar(resetVar, false)
 	}
 
@@ -260,7 +260,7 @@ void initialize() {
     }
 
 	if(resetContactVar) {
-		subscribe(location, "variable:${resetContactVar}.true", resetContactTimers)
+		subscribe(Loc, "variable:${resetContactVar}.true", resetContactTimers)
 		setGlobalVar(resetContactVar, false)
 	}
 }
@@ -275,7 +275,7 @@ void onHandler(evt) {
     if ( state.lights[evt.device.id] ) {
     	state.lights[evt.device.id].start = now()
         state.lights[evt.device.id].count++
-        String startstr = new Date(state.lights[evt.device.id].start).format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+        String startstr = new Date(state.lights[evt.device.id].start).format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
         log.info "device ${evt.device.displayName} turned on at $startstr"
     }
 }
@@ -299,7 +299,7 @@ void openHandler(evt) {
     if ( state.contacts[evt.device.id] ) {
     	state.contacts[evt.device.id].start = now()
         state.contacts[evt.device.id].count++
-        String startstr = new Date(state.contacts[evt.device.id].start).format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+        String startstr = new Date(state.contacts[evt.device.id].start).format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
         log.info "device ${evt.device.displayName} opened at $startstr"
     }
 }
@@ -324,7 +324,7 @@ void resetTimers(evt = null) {
 		def dev = lights.find{"$it.id" == k}
         if ( dev ) {
             state.lights[k].start = dev.currentSwitch == "on" ? now() : 0
-            state.lights[k].time = new Date().format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+            state.lights[k].time = new Date().format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
             state.lights[k].total = 0
             state.lights[k].count = dev.currentSwitch == "on" ? 1 : 0
         }
@@ -337,7 +337,7 @@ void resetContactTimers(evt = null) {
 		def dev = contacts.find{"$it.id" == k}
         if ( dev ) {
             state.contacts[k].start = dev.currentContact == "open" ? now() : 0
-            state.contacts[k].time = new Date().format("MM-dd-yyyy ${location.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
+            state.contacts[k].time = new Date().format("MM-dd-yyyy ${Loc.timeFormat == "12" ? "h:mm:ss a" : "HH:mm:ss"}")
             state.contacts[k].total = 0
             state.contacts[k].count = dev.currentContact == "open" ? 1 : 0
         }
