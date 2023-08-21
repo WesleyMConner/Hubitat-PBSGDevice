@@ -47,7 +47,6 @@ Map monoPage() {
   return dynamicPage(name: 'monoPage') {
     // A single section block minimizes whitespace.
     section {
-settings.LOG = true
       paragraph(
         heading('Pushbutton Instance')
       )
