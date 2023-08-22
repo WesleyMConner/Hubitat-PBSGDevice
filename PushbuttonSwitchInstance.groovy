@@ -109,12 +109,12 @@ Map monoPage() {
 // I N I T I A L I Z A T I O N   &   O P E R A T I O N
 // ---------------------------------------------------
 void installed() {
-  if (settings.LOG) log.trace 'installed()'
+  if (settings.log) log.trace 'installed()'
   initialize()
 }
 
 void updated() {
-  if (settings.LOG) log.trace 'updated()'
+  if (settings.log) log.trace 'updated()'
   unsubscribe()  // Suspend event processing to rebuild state variables.
   unschedule()   // Placeholder for any future scheduled jobs.
   initialize()
@@ -148,11 +148,11 @@ DevW getSwitchById(String id) {
 }
 
 void logSettingsAndState(String calledBy) {
-  if (settings.LOG) log.trace """logSettingsAndState() from ${calledBy}:<br/>
+  if (settings.log) log.trace """logSettingsAndState() from ${calledBy}:<br/>
     <table>
       <tr>
         <th align='right'>LOG:</th>
-        <td>${settings.LOG}</td>
+        <td>${settings.log}</td>
       </tr>
       <tr>
         <th align='right'>swGroupName:</th>
@@ -180,13 +180,13 @@ List<DevW> getOnSwitches() {
 }
 
 void enforceDefault() {
-  if (settings.LOG) log.trace 'enforceDefault()'
+  if (settings.log) log.trace 'enforceDefault()'
   if (settings.defaultSwitchId) {
     List<DevW> onDevices = getOnSwitches()
     if (onDevices.size() == 0) {
       logSettingsAndState('enforceDefault() triggered IN')
       DevW defaultSwitch = getSwitchById(settings.defaultSwitchId)
-      if (settings.LOG) log.trace "enforceDefault() turning on ${deviceTag(defaultSwitch)}."
+      if (settings.log) log.trace "enforceDefault() turning on ${deviceTag(defaultSwitch)}."
       defaultSwitch.on()
       logSettingsAndState('enforceDefault() triggered OUT')
     }
@@ -194,11 +194,11 @@ void enforceDefault() {
 }
 
 void enforceMutualExclusion() {
-  if (settings.LOG) log.trace 'enforceMutualExclusion()'
+  if (settings.log) log.trace 'enforceMutualExclusion()'
   List<DevW> onList = getOnSwitches()
   while (onList.size() > 1) {
     DevW device = onList.first()
-    if (settings.LOG) log.trace "enforceMutualExclusion() turning off ${deviceTag(device)}."
+    if (settings.log) log.trace "enforceMutualExclusion() turning off ${deviceTag(device)}."
     device.off()
     onList = onList.drop(1)
   }
@@ -213,7 +213,7 @@ void buttonHandler (Event e) {
         // Turn off peers in switch group.
         getOnSwitches().each({ sw ->
           if (sw.id != eventDevice.id) {
-            if (settings.LOG) log.trace "buttonHandler() turning off ${deviceTag(sw)}."
+            if (settings.log) log.trace "buttonHandler() turning off ${deviceTag(sw)}."
             sw.off()
           }
         })
@@ -232,7 +232,7 @@ void buttonHandler (Event e) {
 }
 
 void initialize() {
-  if (settings.LOG) log.trace 'initialize()'
+  if (settings.log) log.trace 'initialize()'
   enforceMutualExclusion()
   enforceDefault()
   logSettingsAndState('initialize() about to enable subscription(s)')
@@ -244,7 +244,7 @@ String emphasisOn(String s) {
 }
 
 void uninstalled() {
-  if (settings.LOG) log.trace 'uninstalled()'
+  if (settings.log) log.trace 'uninstalled()'
   // Nothing to do. Subscruptions are automatically dropped.
   // This may matter if devices are captured by a switch group in the future.
 }

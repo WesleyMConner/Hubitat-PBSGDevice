@@ -1,13 +1,13 @@
 {
   "files": [
     {
-      "filepath": "/Users/wes/Sync/development/GitHub/Hubitat-PushbuttonSwitches/PushbuttonSwitches.groovy",
+      "filepath": "/Users/wes/development/GitHub/Hubitat-PushbuttonSwitches/PushbuttonSwitches.groovy",
       "codeType": "app",
       "id": 330,
       "version": 5
     },
     {
-      "filepath": "/Users/wes/Sync/development/GitHub/Hubitat-PushbuttonSwitches/PushbuttonSwitchInstance.groovy",
+      "filepath": "/Users/wes/development/GitHub/Hubitat-PushbuttonSwitches/PushbuttonSwitchInstance.groovy",
       "codeType": "app",
       "id": 331,
       "version": 11

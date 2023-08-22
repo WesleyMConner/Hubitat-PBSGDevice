@@ -68,12 +68,12 @@ Map monoPage() {
 // I N I T I A L I Z A T I O N   &   O P E R A T I O N
 // ---------------------------------------------------
 void installed() {
-  if (settings.LOG) log.trace 'installed()'
+  if (settings.log) log.trace 'installed()'
   initialize()
 }
 
 void updated() {
-  if (settings.LOG) log.trace 'updated()'
+  if (settings.log) log.trace 'updated()'
   unsubscribe()  // Suspend event processing to rebuild state variables.
   initialize()
 }
