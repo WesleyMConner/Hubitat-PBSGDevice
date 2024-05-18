@@ -1,88 +1,72 @@
-//cSpell:words dotfile, dotfiles imagesdir prefs
-:imagesdir: images
-:dev-app: https://docs2.hubitat.com/developer/app/overview["custom Hubitat Application", window=read-ref,opts=”noopener,nofollow”]
-:capability-list: https://docs2.hubitat.com/developer/driver/capability-list["Capability List"], window=read-ref,opts=”noopener,nofollow”]
 
-= Pushbutton Switches
+= Hubitat-PbsgLibrary
+Hubitat-compatible code written for Hubitat's Groovy sandbox environment.
 
-*Pushbutton Switches* is a https://docs2.hubitat.com/developer/app/overview["_custom Hubitat Application_", window=read-ref,opts=”noopener,nofollow”] delivered in two components.
+lPBSG.groovy::
+Hubitat functions that can be incorporated into downstream applications
+via `#include wesmc.lPBSG`. The functions collectively implement
+*PushButton Switch Group (PBSG)* instances where each PBSG instance:
 
-====
-PushbuttonSwitches.groovy:: A Hubitat *Parent App* which DOES NOT enforce application behavior, but DOES collects child instances visually in the Hubitat GUI.
+* Creates and manages a group of Virtual Switches (VSWs) - one per _pushbutton_.
+* Turns off peer VSWs when one of the participating VSWs is turned on.
+* Turns on a default VSW (if specified) when no participating VSW is turned on.
+* Provides a `turnOnPrior()` method to restore the last active VSW.
 
-PushbuttonSwitchInstance.groovy:: A Hubitat *Child App* which implements core behavior - "_mutual exclusion_", "_default switch_" (optional).
-====
+Demo-PBSG.groovy::
+Hubitat-compatible application source code that illustrates:
 
-== Mutual Exclusion
-The primary focus of a *PushbuttonSwitchInstance* is to collect a group of devices (which implement the "_Switch_" capability, see https://docs2.hubitat.com/developer/driver/capability-list["Capability List", window=read-ref,opts=”noopener,nofollow”]) and ensure that only one device is "on" at a time.
+* Creating PBSG instances via a GUI.
+* Creating PBSG instances via a configuration Map.
+* Pushbutton methods and callbacks.
 
-.Pushbutton Switch Example
-Old car radios are a great example of a simple pushbutton switch group. A single button is enabled at any one time. When a new station is enabled, all other stations are disabled.
+lPBSG.zip::
+A _Hubitat Bundle_ for installing the `lPBSG.groovy` Hubitat library and the
+`Demo-PBSG.groovy` Hubitat application.
 
-image::pushbutton-car-radio.jpg[AM Pushbutton Car Radio,300,align="center"]
+packageManifest.json::
+Provided to install the lOBSG.zip bundle via the moniker `WesMC-PBSGLibrary` in
+https://hubitatpackagemanager.hubitatcommunity.com/[Hubitat Package Manager (HPM)].
 
-.Mutual-Exclusion Example
-Given::
-* Four devices are added to a *PushButton Switch* instance, with initial state: +
-`switch1` - _off_ +
-`dimmer27` - _off_ +
-`switch18` - _off_ +
-`virtualSwitch2` - *on*
-Event 0::
-* `dimmer27` is turned "on" (_by whatever means_)
-* The *Pushbutton Switch* instance enforces mutual exclusion.
-* The resulting switch states are: +
-`switch1` - _off_ +
-`dimmer27` - *on* +
-`switch18` - _off_ +
-`virtualSwitch2` - _off_
+== Creating PBSG Instances
+The `Demo-PBSG` application illustrates how PBSG instances can be created
+(1) by soliciting data via an Application user interfaces or (2) by providing
+in-kind data via a configuration Map instance.
 
-== Default Switch Option
-Optionally, a *PushButton Switch* instance can identify one participating switch as the *Default Switch*. If all switches in a *Pushbutton Switch* instance are turned "off", the *Default Switch* is automatically turned on.
+== Rationale for Technology Choices
 
-.Default Switch Example
-Given::
-* Five devices are added to a *PushButton Switch* instance: +
-`switch10`, `switch12`, `dimmer3`, `dimmer8` and `switch15`.
-* `dimmer8` is selected as the *Default Switch*.
-* Initially switch states are: +
-`switch10` - _off_ +
-`switch12` - *on* +
-`dimmer3` - _off_ +
-`dimmer8` (_default_) - _off_ +
-`switch15` - _off_
-Event 1::
-* `switch10` is turned "on" (_by whatever means_)
-* The *Pushbutton Switch* takes no automatic action.
-* The resulting switch states are: +
-`switch10` - *on* +
-`switch12` - _off_ +
-`dimmer3` - _off_ +
-`dimmer8` (_default_) - _off_ +
-`switch15` - _off_
-Event 2::
-* `switch10` is turned "off" (_by whatever means_)
-* The *Pushbutton Switch* enables the *Default Switch*.
-* The resulting switch states are: +
-`switch10` - _off_ +
-`switch12` - _off_ +
-`dimmer3` - _off_ +
-`dimmer8` (_default_) - *on* +
-`switch15` - _off_
+=== Use of a Callback Function in lieu of emitting an Event
+TBD
 
-== Example Use Cases
+=== One Child VSW per PBSG "Button"
 
-=== Mode Selection using Virtual Switches
-Hubitat Modes are mutual exclusive by their nature.
+PROS::
 
-Modes can be adjusted externally (using Amazon Alexa, Google Assistant, ...) by:
+* Unlike pushable buttons or scenes, VSWs can be turned on|off by
+Alexa, Google Home, AirPlay, Hubitat rules, peer applications, etc.
 
-* Associating each mode with a *Hubitat Virtual Switch*
-* Changing modes via the associated virtual switches exclusively.
-* Using rules (or a *Pushbutton Switch* instance) to ensure a single mode switch is enabled at a time.
-* Exposing the mode virtual switches externally.
+CONS::
 
-=== Room Lighting Scene Selection
-While the built-in *Room Lighting* application can facilitate per-room scene creation, it does not ensure a single scene is operating per room at any one time.
+* At scale, creating several PBSG instances (each with
+fully-independent buttons) results in a plethora of VSWs. As of Q2'24, newly
+created VSWs have `Enable debug logging` and `Enable descriptionText logging`
+enabled with no API for creating quieter VSWs.
 
-A per-room *Pushbutton Switch* instance can be used as the basis for developing mutually-exclusive per-room scenes.
+=== Each PBSG Instance Name has a top-level Hubitat State Map Entry
+
+PROS::
+
+* Each PBSG instance is an independent Map - which can be treated like an
+instance of a class (even though operating in Hubitat's sandboxed environment).
+
+* Operations on a PBSG instance are efficient thanks to the use of atomicState
+and atomicState.updateMapValue(...).
+
+* Downstream psuedo-classes can be created by expanding the keys in a PBSG's
+instance Map. For example: Room's may have mutually-independent scenes where
+each Room instance is a PBSG instance with extra keys and methods that operate
+on those keys.
+
+CONS::
+
+* PBSG Names must be sufficiently unique to avoid collisions in the App's
+state|atomicState.
