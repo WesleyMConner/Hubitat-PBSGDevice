@@ -3,9 +3,11 @@ language: en
 caseSensitive: false
 # Quote entries that include '*' or '**'.
 ignorePaths:
+  - .groovylintrc.json
   - .vscode
 words:
   - alexa
+  - groovylintrc
   - hubitat
   - pbsg
   - pushable
