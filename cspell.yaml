@@ -5,6 +5,7 @@ caseSensitive: false
 ignorePaths:
   - .vscode
 words:
+  - alexa
   - hubitat
   - pbsg
   - pushable

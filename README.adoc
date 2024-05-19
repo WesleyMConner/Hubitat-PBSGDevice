@@ -24,7 +24,7 @@ A _Hubitat Bundle_ for installing the `lPBSG.groovy` Hubitat library and the
 `Demo-PBSG.groovy` Hubitat application.
 
 packageManifest.json::
-Provided to install the lOBSG.zip bundle via the moniker `WesMC-PBSGLibrary` in
+Provided to install the lPBSG.zip bundle via the moniker `WesMC-PBSGLibrary` in
 https://hubitatpackagemanager.hubitatcommunity.com/[Hubitat Package Manager (HPM)].
 
 == Creating PBSG Instances
@@ -61,7 +61,7 @@ instance of a class (even though operating in Hubitat's sandboxed environment).
 * Operations on a PBSG instance are efficient thanks to the use of atomicState
 and atomicState.updateMapValue(...).
 
-* Downstream psuedo-classes can be created by expanding the keys in a PBSG's
+* Downstream pseudo-classes can be created by expanding the keys in a PBSG's
 instance Map. For example: Room's may have mutually-independent scenes where
 each Room instance is a PBSG instance with extra keys and methods that operate
 on those keys.
