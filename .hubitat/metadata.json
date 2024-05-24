@@ -1,3 +1,16 @@
 {
-  "files": []
+  "files": [
+    {
+      "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/lPBSG.groovy",
+      "codeType": "library",
+      "id": 37,
+      "version": 9
+    },
+    {
+      "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/Demo-PBSG.groovy",
+      "codeType": "app",
+      "id": 407,
+      "version": 19
+    }
+  ]
 }

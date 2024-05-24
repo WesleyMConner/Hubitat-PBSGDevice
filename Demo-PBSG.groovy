@@ -22,6 +22,7 @@ import com.hubitat.hub.domain.Event as Event
 #include wesmc.lPBSG
 
 definition (
+  name: 'Demo-PBSG',
   namespace: 'wesmc',
   author: 'Wesley M. Conner',
   description: 'Demonstrate PushButtonSwitchGroup (PBSG) Functionality',
@@ -31,68 +32,81 @@ definition (
 )
 
 preferences {
-  page(name: 'Demo-PBSG')
-}
-
-void pbsg_ButtonOnCallback(Map pbsg) {
-  logInfo('pbsg_ButtonOnCallback(...)', "Received button: ${pbsg.activeButton}")
-}
-
-// GUI
-
-Map TestPBSG() {
-  return dynamicPage(
-    name: 'TestPBSG',
-    title: [
-      h1("TestPBSG - ${app.id}"),
-      bullet1('Click <b>Done</b> to enable subscriptions.')
-    ].join('<br/>'),
+  page(
+    name: 'SolicitPbsgData',
+    title: h1("TestPBSG (${app.id})"),
     install: true,
-    uninstall: true
-  ) {
-    //---------------------------------------------------------------------------------
-    // Per https://community.hubitat.com/t/issues-with-deselection-of-settings/36054/42:
-    //   app.removeSetting('..')
-    //   atomicState.remove('..')
-    //---------------------------------------------------------------------------------
-    app.updateLabel('TestPBSG')
-    atomicState.remove('childVsws')
+    uninstall: true,
+    parms: [a: 'apple', b: 'banana', c: 'grape']
+  )
+}
+
+Map SolicitPbsgData(parms) {
+  logInfo('SolicitPbsgData', "parms: ${parms}")
+  dynamicPage(name: "SolicitPbsgData") {
+    ArrayList pbsgNames = ['weekDays']
     section {
-      atomicState.logLevel = logThreshToLogLevel('INFO')  // ERROR, WARN, INFO, DEBUG, TRACE
-      //solicitLogThreshold('appLogThresh', 'INFO')  // ERROR, WARN, INFO, DEBUG, TRACE
-      //atomicState.logLevel = logThreshToLogLevel(settings.appLogThresh) ?: 5
-      // NOTE: atomicState.pbsgs are ALWAYS rebuilt from settings and child VSW discovery.
-      // Create two PBSGs by Soliciting input data from a human
-      for (i in [0, 1]) {
-        Map config = config_SolicitInstance(i)
-        if (config && config.name && config.allButtons) {
-          // The PBSG is created and initialized as the Config is adjusted.
-          // Normally, PBSG configs will be provided as a Map by the
-          // application - i.e., NOT require user input via settings.
-          Map pbsg = pbsg_BuildToConfig(config, 'testPBSG')
-          paragraph "${pbsg_State(pbsg)}"
-        } else {
-          paragraph "PBSG creation is pending sufficient config data"
-        }
+      pbsgNames.each{ name ->
+        String buttonsStringKey = "${name}_ButtonsString"
+        input(
+          name: buttonsStringKey,
+          title: '<b>PBSG BUTTONS</b> (space delimited)',
+          width: 4,
+          type: 'text',
+          submitOnChange: true,
+          required: true,
+          multiple: false
+        )
+        String buttons = settings."${buttonsStringKey}"
+        paragraph "#61 buttons: ${buttons}"
       }
-      // Create a third PBSG by hard-coding a configuration
-      atomicState.TestPBSG = [
-        'name': 'TestPBSG',
-        'instType': 'pbsg',
-        'allButtons': ['one', 'two', 'three', 'four', 'five', 'six'],
-        'defaultButton': 'four'
-      ]
-      Map bruteForcePBSG = pbsg_BuildToConfig('TestPBSG')
-      paragraph([
-        h1('Debug'),
-        //*appStateAsBullets(),
-        //*appSettingsAsBullets(),
-      ].join('<br/>'))
     }
   }
 }
 
+    /*
+    section {
+      int i = 0
+      Map config1 = solicitPbsgConfig(1)
+      logInfo('SolicitPbsgData', "config1: ${config1}")
+      Map config1 = solicitPbsgConfig(2)
+      logInfo('SolicitPbsgData', "config2: ${config2}")
+      Map config1 = solicitPbsgConfig(3)
+      logInfo('SolicitPbsgData', "config3: ${config3}")
+    }
+    */
+
 void initialize() {
+  setLogLevel('INFO')
+  /*
+  ArrayList pbsgNames = ['weekDays']
+
+  // Expand each config Map into a full-blown PBSG.
+  Map pbsg1 = pbsg_BuildToConfig(config.name)
+  pbsgNames.each{ name ->
+    config_SolicitButtons("${name}ButtonsString")
+    if (settings."${name}ButtonsString") {
+      paragraph "#67 ${settings."${name}ButtonsString"}"
+    } else {
+      paragraph "#69 No data yet"
+    }
+  }
+  */
+  /*
+  settings.uiPbsgConfigs.each{ config ->
+    Map pbsg = pbsg_BuildToConfig(config.name)
+    logWarn('initialize', "Created PBSG: ${pbsg} from solicited data")
+  }
+  // Create a PBSG from a config Map (without user input).
+  atomicState.TestPBSG = [
+    'name': 'TestPBSG',
+    'instType': 'pbsg',
+    'allButtons': ['one', 'two', 'three', 'four', 'five', 'six'],
+    'defaultButton': 'four'
+  ]
+  pbsg_BuildToConfig('TestPBSG')
+  logWarn('initialize', "Created PBSG: ${pbsg} from hard-coded config data")
+  */
 }
 
 void installed() {
@@ -107,3 +121,8 @@ void updated() {
   unsubscribe()
   initialize()
 }
+
+void pbsg_ButtonOnCallback(Map pbsg) {
+  logInfo('pbsg_ButtonOnCallback(...)', "Received button: ${pbsg.activeButton}")
+}
+

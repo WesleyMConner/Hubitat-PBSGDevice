@@ -29,23 +29,23 @@ library(
 // The psuedo-class "config" solicits the button data that drives the
 // creation of a psuedo-class "pbsg" instance.
 
-String config_SolicitName(String nameKey) {
+void config_SolicitButtons(String settingsKey) {
   input(
-    name: nameKey, title: '<b>PBSG NAME</b>', width: 2,
-    type: 'text', submitOnChange: true, required: true, multiple: false
+    name: settingsKey,
+    title: '<b>PBSG BUTTONS</b> (space delimited)',
+    width: 4,
+    type: 'text',
+    submitOnChange: true,
+    required: true,
+    multiple: false
   )
-  return settings."${nameKey}"
 }
 
-ArrayList config_SolicitButtons(String buttonsKey) {
-  input(
-    name: buttonsKey, title: '<b>PBSG BUTTONS</b> (space delimited)', width: 4,
-    type: 'text', submitOnChange: true, required: true, multiple: false
-  )
-  return settings."${buttonsKey}"?.tokenize(' ')
-}
+//ArrayList buttonsAsList(String pbsgName)
 
-String config_SolicitDefault(String defaultButtonKey, ArrayList buttons) {
+// settings."${buttonsKey}"?.tokenize(' ')
+
+String config_SolicitDefault(String pbsgName, ArrayList buttons) {
   input(
     name: defaultButtonKey, title: '<b>DEFAULT BUTTON</b>', width: 3,
     type: 'enum', submitOnChange: true, required: false, multiple: false,
@@ -54,7 +54,7 @@ String config_SolicitDefault(String defaultButtonKey, ArrayList buttons) {
   return settings."${defaultButtonKey}"
 }
 
-String config_SolicitInitialActive(String activeButtonKey, ArrayList buttons) {
+String config_SolicitInitialActive(String pbsgName, ArrayList buttons) {
   input(
     name: activeButtonKey, title: '<b>INITIAL ACTIVE BUTTON</b>', width: 3,
     type: 'enum', submitOnChange: true, required: false, multiple: false,
@@ -63,21 +63,24 @@ String config_SolicitInitialActive(String activeButtonKey, ArrayList buttons) {
   return settings."${activeButtonKey}"
 }
 
-Map config_SolicitInstance(Integer settingsKeySuffix) {
+Map solicitPbsgConfig(String pbsgName) {
   // Solicit logical button data used to create a PBSG instance.
   Map config = [:]
-  String nameKey = "pbsgName^${settingsKeySuffix}"
-  String name = config_SolicitName(nameKey)
   if (name) {
-    String buttonsKey = "pbsgButtons^${settingsKeySuffix}"
-    String defaultKey = "pbsgDefault^${settingsKeySuffix}"
+    String buttonsKey = "${pbsgName}_Buttons^${settingsKeySuffix}"
+logInfo('solicitPbsgConfig', "buttonsKey: ${buttonsKey}")
+    String defaultKey = "${pbsgName}_Default^${settingsKeySuffix}"
+logInfo('solicitPbsgConfig', "defaultKey: ${defaultKey}")
     ArrayList allButtons = config_SolicitButtons(buttonsKey)
+logInfo('solicitPbsgConfig', "allButtons: ${allButtons}")
     String defaultButton = config_SolicitDefault(defaultKey, allButtons)
+logInfo('solicitPbsgConfig', "defaultButton: ${defaultButton}")
     config = [
       'name': name,
       'allButtons': allButtons,
       'defaultButton': defaultButton
     ]
+logInfo('solicitPbsgConfig', "config: ${config}")
   } else {
     paragraph('', width: 10)  // Filler for a 12 cell row
   }
@@ -231,7 +234,7 @@ Boolean pbsgConfigExists(String pbsgName) {
   return result
 }
 
-Map pbsg_BuildToConfig(String pbsgName) {
+void pbsg_BuildToConfig(String pbsgName) {
   if (pbsgConfigExists(pbsgName)) {
     // Initialize PBSG instance fields
     atomicState."${pbsgName}".buttonsLIFO = []
@@ -265,7 +268,6 @@ Map pbsg_BuildToConfig(String pbsgName) {
         deleteChildDevice(dni)
       }
     }
-    return pbsgMap
   }
 }
 
