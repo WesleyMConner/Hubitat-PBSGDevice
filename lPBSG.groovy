@@ -54,14 +54,14 @@ String config_SolicitDefault(String pbsgName, ArrayList buttons) {
   return settings."${defaultButtonKey}"
 }
 
-String config_SolicitInitialActive(String pbsgName, ArrayList buttons) {
-  input(
-    name: activeButtonKey, title: '<b>INITIAL ACTIVE BUTTON</b>', width: 3,
-    type: 'enum', submitOnChange: true, required: false, multiple: false,
-    options: buttons
-  )
-  return settings."${activeButtonKey}"
-}
+//-> String config_SolicitInitialActive(String pbsgName, ArrayList buttons) {
+//->   input(
+//->     name: activeButtonKey, title: '<b>INITIAL ACTIVE BUTTON</b>', width: 3,
+//->     type: 'enum', submitOnChange: true, required: false, multiple: false,
+//->     options: buttons
+//->   )
+//->   return settings."${activeButtonKey}"
+//-> }
 
 Map solicitPbsgConfig(String pbsgName) {
   // Solicit logical button data used to create a PBSG instance.

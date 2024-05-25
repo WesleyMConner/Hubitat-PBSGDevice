@@ -36,29 +36,76 @@ preferences {
     name: 'SolicitPbsgData',
     title: h1("TestPBSG (${app.id})"),
     install: true,
-    uninstall: true,
-    parms: [a: 'apple', b: 'banana', c: 'grape']
+    uninstall: true
   )
 }
 
-Map SolicitPbsgData(parms) {
-  logInfo('SolicitPbsgData', "parms: ${parms}")
+Map SolicitPbsgData() {
   dynamicPage(name: "SolicitPbsgData") {
-    ArrayList pbsgNames = ['weekDays']
-    section {
-      pbsgNames.each{ name ->
-        String buttonsStringKey = "${name}_ButtonsString"
+    // Consume pbsgNames, producing pbsgConfigs
+    ArrayList pbsgNames = ['weekDays', 'dogs']
+    ArrayList pbsgConfigs = []
+    String pbsgName = pbsgNames.pop()
+    Integer loopA = 0
+    if (pbsgName) {
+      loopA++
+      // Loops until all config data keys for pbsgName are present.
+      // Then, advance to the next pbsgName (if available) or exit.
+      section {
+        paragraph("loopA: ${loopA}")
+        paragraph("pbsgName: ${pbsgName}")
+        paragraph("pbsgNames: ${pbsgNames}")
+        paragraph("pbsgConfigs: ${pbsgConfigs}")
+        String buttonsKey = "${pbsgName}_ButtonsKey"
+        String dfltButtonKey = "${pbsgName}_DefaultKey"
+        ArrayList buttonList = settings."${buttonsKey}"?.tokenize(' ')
+        Integer buttonCount = buttonList?.size()
+        ArrayList settingsKeys = (settings as Map).keySet() // Set→List
+        ArrayList heading = []
+        switch (buttonCount) {
+          case null:
+            heading << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+            heading << i("Enter button names ${b('delimited with spaces')}")
+            break
+          case 1:
+            heading << h1('Oops only one button was detected')
+            heading << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+            heading << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+            break
+          default:
+            heading << h2("Button names for PBSG ${b(pbsgName)}")
+            heading << i("button names ${b('delimited with spaces')}")
+        }
         input(
-          name: buttonsStringKey,
-          title: '<b>PBSG BUTTONS</b> (space delimited)',
-          width: 4,
+          name: buttonsKey,
+          title: heading.join('<br/>'),
           type: 'text',
           submitOnChange: true,
           required: true,
           multiple: false
         )
-        String buttons = settings."${buttonsStringKey}"
-        paragraph "#61 buttons: ${buttons}"
+        if (buttonCount > 2 && !settingsKeys.contains(dfltButtonKey)) {
+          //paragraph(h2("PBSG '${b(pbsgName)}' has buttons: ${buttonList}"))
+          input(
+            name: dfltButtonKey,
+            title: "Default Button for ${b(pbsgName)}:",
+            type: 'enum',
+            submitOnChange: true,
+            required: false,
+            multiple: false,
+            options: buttonList
+          )
+        } else {
+          pbsgConfigs << [
+            name: pbsgName,
+            buttons: buttonList,
+            dfltButton: settings."${dfltButtonKey}"
+          ]
+          pbsgName = pbsgNames.pop()
+          paragraph("TBD NEXT PBSG")
+          paragraph("pbsgConfigs: ${pbsgConfigs}")
+          paragraph("pbsgName: ${pbsgName}")
+        }
       }
     }
   }
