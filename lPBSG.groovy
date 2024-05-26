@@ -26,65 +26,74 @@ library(
   category: 'general purpose'
 )
 
-// The psuedo-class "config" solicits the button data that drives the
-// creation of a psuedo-class "pbsg" instance.
+ArrayList buttonsAsList(String buttonsSettingsKey) {
+  String buttons = settings."${buttonsSettingsKey}"
+  return buttons?.tokenize(' ')
+}
 
-void config_SolicitButtons(String settingsKey) {
+void solicitPbsgConfig(String pbsgName) {
+  // OVERVIEW
+  //   - This method is called from within a page section{...}
+  //   - The client first populates the names of the PBSG buttons.
+  //   - Once the list of buttons exists, the user selects a default button
+  //     or 'not applicable'
+  //   - All exposed fields can be edited until data entry is "Done".
+  paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
+  // Tokenize the space-delimited buttons to produdce a list of buttons
+  ArrayList buttonList = buttonsAsList("${pbsgName}_buttonsSettingsKey")
+  Integer buttonCount = buttonList?.size()
+  // Adjust the title (heading) to provide feedback to the client.
+  ArrayList heading = []
+  switch (buttonCount) {
+    case 1:
+      heading << h1('Oops only one button was detected')
+      heading << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+      // Deliberately fall through to the next case!
+    case null:
+      heading << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+      heading << i("Enter button names ${b('delimited with spaces ')}")
+      break
+    default:
+        heading << h2("Button names for PBSG ${b(pbsgName)}")
+        heading << i('button names are delimited with spaces')
+  }
   input(
-    name: settingsKey,
-    title: '<b>PBSG BUTTONS</b> (space delimited)',
-    width: 4,
+    name: "${pbsgName}_buttonsSettingsKey",
+    title: heading.join('<br/>'),
     type: 'text',
     submitOnChange: true,
     required: true,
     multiple: false
   )
-}
-
-//ArrayList buttonsAsList(String pbsgName)
-
-// settings."${buttonsKey}"?.tokenize(' ')
-
-String config_SolicitDefault(String pbsgName, ArrayList buttons) {
-  input(
-    name: defaultButtonKey, title: '<b>DEFAULT BUTTON</b>', width: 3,
-    type: 'enum', submitOnChange: true, required: false, multiple: false,
-    options: buttons
-  )
-  return settings."${defaultButtonKey}"
-}
-
-//-> String config_SolicitInitialActive(String pbsgName, ArrayList buttons) {
-//->   input(
-//->     name: activeButtonKey, title: '<b>INITIAL ACTIVE BUTTON</b>', width: 3,
-//->     type: 'enum', submitOnChange: true, required: false, multiple: false,
-//->     options: buttons
-//->   )
-//->   return settings."${activeButtonKey}"
-//-> }
-
-Map solicitPbsgConfig(String pbsgName) {
-  // Solicit logical button data used to create a PBSG instance.
-  Map config = [:]
-  if (name) {
-    String buttonsKey = "${pbsgName}_Buttons^${settingsKeySuffix}"
-logInfo('solicitPbsgConfig', "buttonsKey: ${buttonsKey}")
-    String defaultKey = "${pbsgName}_Default^${settingsKeySuffix}"
-logInfo('solicitPbsgConfig', "defaultKey: ${defaultKey}")
-    ArrayList allButtons = config_SolicitButtons(buttonsKey)
-logInfo('solicitPbsgConfig', "allButtons: ${allButtons}")
-    String defaultButton = config_SolicitDefault(defaultKey, allButtons)
-logInfo('solicitPbsgConfig', "defaultButton: ${defaultButton}")
-    config = [
-      'name': name,
-      'allButtons': allButtons,
-      'defaultButton': defaultButton
-    ]
-logInfo('solicitPbsgConfig', "config: ${config}")
-  } else {
-    paragraph('', width: 10)  // Filler for a 12 cell row
+  if (buttonCount > 2) {
+    input(
+      name: "${pbsgName}_DfltSettingsKey",
+      title: "Default Button for ${b(pbsgName)}:",
+      type: 'enum',
+      submitOnChange: true,
+      required: true,                 // Ensures user makes a selection!
+      multiple: false,
+      options: [*buttonList, 'not applicable']
+    )
   }
-  return config
+}
+
+void convertSolicitedPbsgConfigToState(String pbsgName, String instType = 'pbsg') {
+  // The client was forced to populate a default PBSG button.
+  // If 'not applicable' was selected, coerce it to null.
+  String dfltSettingsKey = "${pbsgName}_DfltSettingsKey"
+  //-> String defaultButton = settings."${dfltSettingsKey}"
+  //-> if (defaultButton == 'not applicable') { defaultButton == null }
+  // Assemble the PBSG Config Map in state (as seed data for creating a
+  // full-fledged PBSG).
+  atomicState."${pbsgName}" = [
+    name: pbsgName,
+    instType: instType,
+    allButtons: buttonsAsList("${pbsgName}_buttonsSettingsKey"),
+    defaultButton: (settings."${dfltSettingsKey}" == 'not applicable')
+      ? null
+      : settings."${dfltSettingsKey}"
+  ]
 }
 
 DevW pbsg_GetOrCreateMissingDevice(DevW device, String deviceDNI) {
@@ -216,12 +225,12 @@ void missingKey(String stateKey, String objectKey) {
 Boolean pbsgConfigExists(String pbsgName) {
   // PBSG creation leverages the following initial 'configuration' fields:
   //   - name ............. required
-  //   - instType ......... required
+  //   - instType ......... required ('pbsg' is the defacto "base class")
   //   - allButtons ....... required
   //   - defaultButton .... optional
   Boolean result = false
   if (!atomicState."${pbsgName}") {
-    logError('pbsg_BuildToConfig', "Cannot find '${pbsgName}' in atomicState")
+    logError('pbsgConfigExists', "Cannot find '${pbsgName}' in atomicState")
   } else if (!atomicState."${pbsgName}".name) {
     missingKey(pbsgName, 'name')
   } else if (!atomicState."${pbsgName}".instType) {
@@ -253,7 +262,7 @@ void pbsg_BuildToConfig(String pbsgName) {
           pbsg_DeactivateButton(pbsgName, button)
       }
     }
-    if (atomicState."${pbsgName}".activeButton) {
+    if (!atomicState."${pbsgName}".activeButton) {
       pbsg_EnforceDefault(pbsgName)
     }
     getChildDevices().each { device ->
@@ -334,4 +343,10 @@ String pbsg_State(String pbsgName) {
     logError('pbsg_State', "Could not find pbsg '${pbsgName}'")
   }
   return result
+}
+
+void pbsg_ButtonOnCallback(String pbsgName) {
+  // Once a PBSG instance is created, this method is called to communicate
+  // a change in the state of the named PBSG instance.
+  logInfo('pbsg_ButtonOnCallback', "pbsg: ${pbsg_State(pbsgName)}")
 }
