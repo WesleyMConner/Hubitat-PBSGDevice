@@ -46,8 +46,10 @@ ArrayList getTestActions(String pbsgName) {
   ArrayList buttons = buttonStringToButtonList("${pbsgName}_allSettingsKey")
   ArrayList testActions = new ArrayList()
   buttons.each{ b ->
-    testActions << "${b}_On"
-    testActions << "${b}_Off"
+    testActions << "${b}_ButtonOn"
+    testActions << "${b}_ButtonOff"
+    testActions << "${b}_VswOn"
+    testActions << "${b}_VswOff"
   }
   testActions.add('Activate last active')
   //testActions << 'No more actions'
@@ -85,20 +87,18 @@ void solicitTestSequence(String pbsgName, ArrayList testOptions) {
     type: 'enum',
     submitOnChange: true,
     required: false,                 // Ensures user makes a selection!
-    width: 5,
+    width: 3,
     options: getTestActions(pbsgName)
   )
   settings."${testSeqKey}" = testSeqJson
-  paragraph('>>', width: 2)
   app.removeSetting(testSeqKey)
   input(
     name: testSeqKey,
     title: "Save ${b(pbsgName)} Test Sequence",
     type: 'textarea',
-    rows: testSeqList?.size(),
     submitOnChange: true,
     required: true,
-    width: 5,
+    width: 9,
     defaultValue: testSeqJson
   )
   paragraph(
@@ -112,7 +112,7 @@ preferences {
   page(name: 'testSequencePage')
 }
 
-String getPbsgNames () {
+String getPbsgStateNames () {
   return settings.pbsgNames?.tokenize(' ')
 }
 
@@ -212,32 +212,50 @@ void initialize() {
   //     a PBSG instance.
   //   - Top-level Maps in state are efficiently processed with the
   //     atomicState() and atomicState.updateMapValue(...).
+  // CREATE PBSG INSTANCES AND RUN ANY TEST SEQUENCES
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
+  // Build the PBSG and run
   pbsgNames.each { pbsgName ->
-    Map pbsgConfig = createPbsgStateFromConfig(pbsgName)
+    Map pbsgConfig = gatherPbsgStateFromConfig(pbsgName)
     Map pbsg = pbsg_BuildToConfig(pbsgConfig)
-    String testSeqKey = "${pbsgName}_TestSequence"
+      String testSeqKey = "${pbsgName}_TestSequence"
     String testSeqJson = settings."${testSeqKey}"
     ArrayList testSeqList = fromJson(testSeqJson)
     Integer actionCnt = testSeqList.size()
     testSeqList?.eachWithIndex{ testAction, index ->
       logInfo('initialize', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
       if (testAction == 'Activate last active') {
-        pbsg_ActivateLastActive(pbsg) && updatePbsgState(pbsg)
+        pbsg_ActivateLastActive(pbsg) && putPbsgState(pbsg)
       } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
-          String button = tokenizedAction[0]
+          String target = tokenizedAction[0]  // Could be a button or a VSW
           String action = tokenizedAction[1]
           //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
           switch (action) {
-            case 'On':
-              pbsg_ActivateButton(pbsg, button) && updatePbsgState(pbsg)
-              //-> logInfo('initialize', pbsg_State(pbsg))
+            case 'ButtonOn':
+              pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)
               break
-            case 'Off':
-              pbsg_DeactivateButton(pbsg, button) && updatePbsgState(pbsg)
-              //-> logInfo('initialize', pbsg_State(pbsg))
+            case 'ButtonOff':
+              pbsg_DeactivateButton(pbsg, target) && putPbsgState(pbsg)
+              break
+            case 'VswOn':
+              // Simulate an external VSW on
+              String vswDni = "${pbsg.name}_${target}"
+              logInfo('initialize', "Turning VSW ${vswDni} on")
+              DevW vsw = getChildDevice(vswDni)
+              vsw.on()
+              pauseExecution(200) // Pause for pbsg_ButtonOnCallback()
+              pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
+              break
+            case 'VswOff':
+              // Simulate an external VSW off
+              String vswDni = "${pbsg.name}_${target}"
+              logInfo('initialize', "Turning VSW ${vswDni} off")
+              DevW vsw = getChildDevice(vswDni)
+              vsw.off()
+              pauseExecution(200) // Pause for pbsg_ButtonOnCallback()
+              pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
               logError('initialize', [
@@ -252,5 +270,22 @@ void initialize() {
         }
       }
     }
+  }
+  // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
+  ArrayList childDNIs = getChildDevices().collect{d -> d.getDeviceNetworkId()}
+  ArrayList expectedDNIs = []
+  pbsgNames.each { pbsgName ->
+    Map pbsg = getPbsgState(pbsgName)
+    pbsg.all.each{ button -> expectedDNIs << "${pbsgName}_${button}" }
+  }
+  ArrayList orphanedDNIs = childDNIs.minus(expectedDNIs)
+  logInfo('initialize', ['',
+    "   ${b('childDNIs')}: ${childDNIs}",
+    "${b('expectedDNIs')}: ${expectedDNIs}",
+    "${b('orphanedDNIs')}: ${orphanedDNIs}"
+  ])
+  orphanedDNIs.each{ dni ->
+    logWarn('initialize', "Deleting orphaned device w/ DNI: ${b(dni)}")
+    deleteChildDevice(dni)
   }
 }
