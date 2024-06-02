@@ -89,10 +89,13 @@ Map getPbsg(String pbsgName) {
   return atomicState."${pbsgName}"
 }
 
-void reconcileAndPutPbsg(Map pbsg) {
+void updatePbsgState(Map pbsg) {
+  // Ensure the VSWs are on/off consistent with the PBSG
   pbsg_ReconcileVswState(pbsg)
-  //-> logInfo('reconcileAndPutPbsg', "pbsg: ${pbsg_State(pbsg)}")
+  // Save the PBSG atomicState
   atomicState."${pbsg.name}" = pbsg
+  // Invoke the client's callback function.
+  pbsg_ButtonOnCallback(pbsg)
 }
 
 Map createPbsgStateFromConfig(String pbsgName, String instType = 'pbsg') {
@@ -143,7 +146,7 @@ boolean pbsg_ActivateButton(Map pbsg, String button) {
     logWarn('pbsg_ActivateButton', "${b(button)} was already activated")
   } else {
     if (pbsg.active) {
-      pbsg.lifo.push(pbsg.active)  // The cast is required
+      pbsg.lifo.push(pbsg.active)
       result = true
     }
     if (pbsg.lifo.contains(button)) {
@@ -162,9 +165,19 @@ boolean pbsg_DeactivateButton(Map pbsg, String button) {
   // Assumed: pbsg != null
   // Returns true on a PBSG state change
   boolean result = false
-  if (pbsg.active == button) {
-    pbsg.lifo.push(pbsg.active)
-    pbsg.active = pbsg.dflt
+  if (button == pbsg.dflt) {
+    logWarn(
+      'pbsg_DeactivateButton',
+      "Ignore requested deactivation of the default button ${b(button)}"
+    )
+  } else if (pbsg.active == button) {
+    if (pbsg.dflt) {
+      // Swap currentlt active button with default button
+      pbsg_ActivateButton(pbsg, pbsg.dflt)
+    } else {
+      // Deactivate active button only
+      pbsg.lifo.push(pbsg.active)
+    }
     result = true
   } else if (pbsg.lifo.contains(button)) {
     logWarn('pbsg_DeactivateButton', "${b(button)} was already deactivated")
@@ -176,15 +189,18 @@ boolean pbsg_DeactivateButton(Map pbsg, String button) {
 
 DevW getOrCreateDevice(String dni) {
   DevW d = getChildDevice(dni)
-  ?: addChildDevice(
-    'hubitat',         // namespace
-    'Virtual Switch',  // typeName
-    dni,               // device's unique DNI (with '_' delimiter)
-    [                  // properties
-      isComponent: true,
-      name: dni.replaceAll('_', ' ')
-    ]
-  )
+  if (!d) {
+    logWarn('getOrCreateDevice', "Creating VSW ${b(dni)}")
+    d = addChildDevice(
+      'hubitat',         // namespace
+      'Virtual Switch',  // typeName
+      dni,               // device's unique DNI (with '_' delimiter)
+      [                  // properties
+        isComponent: true,
+        name: dni.replaceAll('_', ' ')
+      ]
+    )
+  }
   return d
 }
 
@@ -208,7 +224,7 @@ void pbsg_ReconcileVswState(Map pbsg) {
     }
   }
   // Pause for child device updates.
-  pauseExecution(100)
+  pauseExecution(200)
   // Re-subscribe to child VSW events.
   buttonsToVsw.each{ button, device ->
     subscribe(device, pbsg_VswEventHandler, ['filterEvents': true])
@@ -217,7 +233,13 @@ void pbsg_ReconcileVswState(Map pbsg) {
 
 boolean pbsg_ActivateLastActive(Map pbsg) {
   // Assumed: pbsg != null
-  return pbsg_ActivateButton(pbsg, pbsg.lifo[0])
+  // REMINDER
+  //   - The ListArray implementation operates in reverse. A call to
+  //     push(item) APPENDS item instead of PREPENDING item. As a
+  //     conseqeucnce last active is lifo[lifo.size()-1] INSTEAD OF
+  //     lifo[0]
+  Integer latestPushIndex = pbsg.lifo.size() - 1
+  return pbsg_ActivateButton(pbsg, pbsg.lifo[latestPushIndex])
 }
 
 boolean pbsg_EnforceDefault(Map pbsg) {
@@ -240,15 +262,15 @@ Map pbsg_BuildToConfig(Map pbsg) {
   // based on the current state of discovered devices.
   pbsg.all.each { button ->
     if (button) {
-      pbsg.lifo.push(button)
       String dni = "${pbsg.name}_${button}"
       DevW device = getOrCreateDevice(dni)
-      switch (switchState(device)) {
-        case 'on':
-          pbsg_ActivateButton(pbsg, button)
-            break
-        default:
-          pbsg_DeactivateButton(pbsg, button)
+      pbsg.lifo.push(button)
+      if (switchState(device) == 'on') {
+        // Promote button from LIFO to active
+        logInfo('pbsg_BuildToConfig', "Found VSW ${dni} (${b('on')})")
+        pbsg_ActivateButton(pbsg, button)
+      } else {
+        logInfo('pbsg_BuildToConfig', "VSW ${dni} (${i('off')})")
       }
     } else {
       logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
@@ -256,9 +278,7 @@ Map pbsg_BuildToConfig(Map pbsg) {
   }
   if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
   // Write PBSG to atomicState
-  reconcileAndPutPbsg(pbsg)
-  // Communicate the initial PBSG state to the client.
-  pbsg_ButtonOnCallback(pbsg)
+  updatePbsgState(pbsg)
   // Remove stale VSWs
   getChildDevices().each { device ->
     String dni = device.deviceNetworkId

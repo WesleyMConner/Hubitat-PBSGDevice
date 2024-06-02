@@ -68,42 +68,17 @@ def fromJson (String json) {
 void solicitTestSequence(String pbsgName, ArrayList testOptions) {
   String testSeqKey = "${pbsgName}_TestSequence"
   String testSeqJson = settings."${testSeqKey}"
-  ArrayList testSeqList = fromJson(testSeqJson)
+  ArrayList testSeqList = fromJson(testSeqJson) ?: []
   // Add the most recent 'next action' to the 'test sequence'.
   String nextActionKey = "${pbsgName}_NextTestAction"
   String nextAction = settings."${nextActionKey}"
-  // paragraph([
-  //   "1>>> ${b('solicitTestSequence()')}",
-  //   "1>>>   pbsgName: ${pbsgName}",
-  //   "1>>>   testOptions: ${testOptions}",
-  //   "1>>>   nextAction: ${nextAction}",
-  //   "1>>>   testSeqList Size: ${testSeqList?.size()}",
-  //   "1>>>   testSeqList: ${testSeqList}",
-  //   "1>>>   testSeqJson: ${testSeqJson}"
-  // ].join('<br/>'))
   if (nextAction) {
-    // if (nextAction[0] == 'No more actions') {
-    //   // The client has finished building the test sequence
-    //   return
-    // }
-    // Grow the test sequence
-    testSeqList = cleanStrings([*testSeqList, nextAction].flatten())
+    testSeqList.add(nextAction)
     testSeqJson = toJson(testSeqList)
     // Clear prior settings and re-solicit below.
     app.removeSetting(testSeqKey)
     app.removeSetting(nextActionKey)
   }
-  // paragraph([
-  //   "2>>> ${b('solicitTestSequence()')}",
-  //   "2>>>   pbsgName: ${pbsgName}",
-  //   "2>>>   testOptions: ${testOptions}",
-  //   "2>>>   nextActionKey: ${nextActionKey}",
-  //   "2>>>   nextAction: ${nextAction}",
-  //   "2>>>   testSeqKey: ${testSeqKey}",
-  //   "2>>>   testSeqList Size: ${testSeqList?.size()}",
-  //   "2>>>   testSeqList: ${testSeqList}",
-  //   "2>>>   testSeqJson: ${testSeqJson}"
-  // ].join('<br/>'))
   input(
     name: nextActionKey,
     title: "Add a ${b(pbsgName)} Test Action:",
@@ -132,9 +107,9 @@ void solicitTestSequence(String pbsgName, ArrayList testOptions) {
 }
 
 preferences {
-  page(name: 'demoPbsg', nextPage: 'testActions')
-  page(name: 'testActions', nextPage: 'testSeqList')
-  page(name: 'testSeqList')
+  page(name: 'demoPbsg', nextPage: 'testActionsPage')
+  page(name: 'testActionsPage', nextPage: 'testSequencePage')
+  page(name: 'testSequencePage')
 }
 
 String getPbsgNames () {
@@ -167,9 +142,9 @@ Map demoPbsg() {
   }
 }
 
-Map testActions() {
+Map testActionsPage() {
   return dynamicPage(
-    name: 'testActions',
+    name: 'testActionsPage',
     title: h1("TestPBSG (${app.id})"),
     uninstall: true
   ) {
@@ -192,9 +167,9 @@ Map testActions() {
   }
 }
 
-Map testSeqList() {
+Map testSequencePage() {
   return dynamicPage(
-    name: 'testSeqList',
+    name: 'testSequencePage',
     title: h1("TestPBSG (${app.id})"),
     install: true,
     uninstall: true
@@ -240,9 +215,7 @@ void initialize() {
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
   pbsgNames.each { pbsgName ->
     Map pbsgConfig = createPbsgStateFromConfig(pbsgName)
-    logInfo('initialize', "pbsgConfig: ${pbsgConfig}")
     Map pbsg = pbsg_BuildToConfig(pbsgConfig)
-    logInfo('initialize', "pbsg (Build Check): ${pbsg_State(pbsg)}")
     String testSeqKey = "${pbsgName}_TestSequence"
     String testSeqJson = settings."${testSeqKey}"
     ArrayList testSeqList = fromJson(testSeqJson)
@@ -250,7 +223,7 @@ void initialize() {
     testSeqList?.eachWithIndex{ testAction, index ->
       logInfo('initialize', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
       if (testAction == 'Activate last active') {
-        pbsg_ActivateLastActive(pbsg) && reconcileAndPutPbsg(pbsg)
+        pbsg_ActivateLastActive(pbsg) && updatePbsgState(pbsg)
       } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
@@ -259,12 +232,12 @@ void initialize() {
           //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
           switch (action) {
             case 'On':
-              pbsg_ActivateButton(pbsg, button) && reconcileAndPutPbsg(pbsg)
-              //logInfo('initialize#On#262', pbsg_State(pbsg))
+              pbsg_ActivateButton(pbsg, button) && updatePbsgState(pbsg)
+              //-> logInfo('initialize', pbsg_State(pbsg))
               break
             case 'Off':
-              pbsg_DeactivateButton(pbsg, button) && reconcileAndPutPbsg(pbsg)
-              //logInfo('initialize#Off#266', pbsg_State(pbsg))
+              pbsg_DeactivateButton(pbsg, button) && updatePbsgState(pbsg)
+              //-> logInfo('initialize', pbsg_State(pbsg))
               break
             default:
               logError('initialize', [
@@ -274,7 +247,6 @@ void initialize() {
                 "action >${action}<",
               ])
           }
-          logInfo('initialize', "${testAction} -> ${pbsg_State(pbsg)}")
         } else {
           logError('initialize', "unexpected testAction >${testAction}<")
         }
