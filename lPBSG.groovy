@@ -224,8 +224,6 @@ void pbsg_ReconcileVswsToState(Map pbsg) {
     String dni = "${pbsg.name}_${button}"
     buttonToVsw << [ (button) : getOrCreateDevice(dni) ]
   }
-  //---> // Unsubscribe from child VSW events.
-  //---> buttonToVsw.each{ button, vsw -> unsubscribe(vsw) }
   // Ensure VSW state matches button state.
   buttonToVsw.each{ button, vsw ->
     if (pbsg.active == button) {
@@ -234,12 +232,6 @@ void pbsg_ReconcileVswsToState(Map pbsg) {
       if ( switchState(vsw) != 'off') { vsw.off() }
     }
   }
-  pauseExecution(100) // Pause for child vsw updates.
-  //---> // Re-subscribe to child VSW events.
-  //---> buttonsToVsw.each{ button, vsw ->
-  //--->   subscribe(vsw, 'switch', PbsgChildVswEventHandler, ['filterEvents': true])
-  //---> }
-//  pauseExecution(50) // Pause for re-subscription.
 }
 
 boolean pbsg_ActivateLastActive(Map pbsg) {
@@ -343,21 +335,22 @@ String pbsg_State(Map pbsg) {
 //// PBSG EVENT HANDLER
 
 void PbsgChildVswEventHandler(Event e) {
-  // VERY IMPORTANT
-  //   - VSW event subscriptions are suppressed when this application is
-  //     adjusting its owned VSWs.
-  //   - This handler exists to processes VSW changes made externally
-  //     (e.g., by the Hubitat GUI, Alexa, ...).
-  //   - An event's displayName (e.displayName) is the "name" of the VSW,
-  //     NOT the DNI of the VSW.
-  //         Format of name: '${pbsgInstName} ${buttonName}'
-  //         Format of dni:  '${pbsgInstName}_${buttonName}'
-  //     Take care when tokenizing e.displayName.
-  //   - RA2 turns off one scene BEFORE turning on the replacement scene.
-  //   - PRO2 turns on scenes without turning off predecessors.
-  //   - Ensure that PBSG adjustements are persisted to atomicState.
-  //--->
-  //---> logInfo('PbsgChildVswEventHandler', "${e.displayName} → ${e.value}")
+  // This handler processes VSW changes, including:
+  //   - Changes made by this application - see pbsg_ReconcileVswsToState()
+  //   - Changes made externally by the Hubitat GUI, Alexa, etc.
+  // An event's displayName (e.displayName) is the "name" of the VSW
+  // which differs from the Device Network Id (DNI). Some care is
+  // required when tokenizing e.displayName.
+  //     Name Format: '${pbsgInstName} ${buttonName}'  ← note whitespace
+  //      DNI Format: '${pbsgInstName}_${buttonName}'  ← note underscore
+  // Some external sources generate back-to-back events:
+  //   - Lutron RadioRA (RA2) turns off one scene BEFORE turning on
+  //     the replacement scene.
+  //   - Lutron Caséta (PRO2) turns on scenes without turning off
+  //     predecessors.
+  // When this method makes a change to a PBSG instance, it commits
+  // changes to atomicState using putPbsgState() which ensures changes
+  // are reported to the client's callback function.
   if (e.name == 'switch') {
     ArrayList parsedName = e.displayName.tokenize(' ')
     String pbsgName = parsedName[0]
@@ -366,7 +359,7 @@ void PbsgChildVswEventHandler(Event e) {
     switch (e.value) {
       case 'on':
         if (pbsg.active != button) {
-          // This reported event DOES NOT match the current PBSG state.
+          // This reported event differs from the current PBSG state.
           logInfo(
             'PbsgChildVswEventHandler',
             "${b(button)} VSW turned on .. activating")
@@ -376,14 +369,14 @@ void PbsgChildVswEventHandler(Event e) {
         }
         break
       case 'off':
-        if (!pbsg.lifo.contains(button)) {
-          // This reported event DOES NOT match the current PBSG state.
+        if (pbsg.lifo.contains(button)) {
+          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
+        } else {
+          // This reported event differs from the current PBSG state.
           logInfo(
             'PbsgChildVswEventHandler',
             "${b(button)} VSW turned off .. deactivating")
           pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
-        } else {
-          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
         }
         break
       default:
@@ -399,17 +392,4 @@ void PbsgChildVswEventHandler(Event e) {
       "Ignoring ${eventDetails(e)}"
     )
   }
-  //---> logInfo('PbsgChildVswEventHandler', "pbsgName: ${pbsgName}, button: ${button}")
-  //---> if (e.value == 'on') {
-  //--->   pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
-  //--->   //-> logInfo('PbsgChildVswEventHandler', pbsg_State(pbsg))
-  //---> } else if (e.value == 'off') {
-  //--->   pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
-  //--->   //-> logInfo('PbsgChildVswEventHandler', pbsg_State(pbsg))
-  //---> } else {
-  //--->   logWarn(
-  //--->     'PbsgChildVswEventHandler',
-  //--->     "Unexpected value (${e.value}) for (${e.displayName}"
-  //--->   )
-  //--->}
 }

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------------
-// P B S G 2
+// D E M O   P B S G
 //
 // Copyright (C) 2023-Present Wesley M. Conner
 //
@@ -34,10 +34,13 @@ definition (
 )
 
 void pbsg_ButtonOnCallback(Map pbsg) {
-  // Once one or more PBSG instances are created, this method is called
-  // to communicate a PBSG instance state change. This method is typically
-  // developed to process state changes based on the instance type and/or
-  // the instance name.
+  // Clients specialize this method to handle PBSG updates. [The callback
+  // is used in lieu of sending App-to-App events.]
+  //   - Clients may have more than one PBSG instance (distinct Maps in
+  //     AtomicState).
+  //   - Clients can also extend PBSG (effectively, create a derived class)
+  //     and adjust 'instType' to differentiate their extension from the
+  //     'base class' (instType == 'pbsg'_.
   logInfo('pbsg_ButtonOnCallback', pbsg_State(pbsg))
 }
 
@@ -100,9 +103,6 @@ void solicitTestSequence(String pbsgName, ArrayList testOptions) {
     required: true,
     width: 9,
     defaultValue: testSeqJson
-  )
-  paragraph(
-    "Once 'Done' is pressed, the Test Sequence results should appear in the log."
   )
 }
 
@@ -186,6 +186,22 @@ Map testSequencePage() {
         ArrayList testActions = getTestActions(pbsgName)
         solicitTestSequence(pbsgName, testActions)
       }
+      input(
+        name: pauseForCallback,
+        title: [
+          h3("${b('Wait time')} (in milliseconds) for VSW Actions"),
+          '- When a Test Sequence turns a VSW on|off there is a delay',
+          '  before this App receives an event reporting the change.',
+          '- An overloaded Hubitat may require a longer delay.',
+        ],
+        type: number,
+        defaultValue: 200,
+        submitOnChange: true,
+        required: true
+      )
+      paragraph(
+        "Once 'Done' is pressed, the Test Sequence results should appear in the log."
+      )
     }
   }
 }
@@ -212,13 +228,22 @@ void initialize() {
   //     a PBSG instance.
   //   - Top-level Maps in state are efficiently processed with the
   //     atomicState() and atomicState.updateMapValue(...).
-  // CREATE PBSG INSTANCES AND RUN ANY TEST SEQUENCES
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
+    // CREATE THE PBSG INSTANCE
+    //   - Here, the PBSG configuration is solicted from user input
+    //   - It is possible to provide configuration by brute force:
+    //     Map config = {
+    //           name: ...,            // The name of the PBSG
+    //            all: ...,            // ArrayList of button names
+    //       instType: ...,            // 'pbsg' in most cases
+    //           dflt: ...             // The default button name
+    //     }
     Map pbsgConfig = gatherPbsgStateFromConfig(pbsgName)
     Map pbsg = pbsg_BuildToConfig(pbsgConfig)
-      String testSeqKey = "${pbsgName}_TestSequence"
+    // BUILD AND RUN ANY TEST SEQUENCES
+    String testSeqKey = "${pbsgName}_TestSequence"
     String testSeqJson = settings."${testSeqKey}"
     ArrayList testSeqList = fromJson(testSeqJson)
     Integer actionCnt = testSeqList.size()
@@ -254,7 +279,7 @@ void initialize() {
               logInfo('initialize', "Turning VSW ${vswDni} off")
               DevW vsw = getChildDevice(vswDni)
               vsw.off()
-              pauseExecution(200) // Pause for pbsg_ButtonOnCallback()
+              pauseExecution(settings.pauseForCallback) // Wait for callback
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
