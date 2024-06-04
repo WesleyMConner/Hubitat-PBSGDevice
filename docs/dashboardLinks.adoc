@@ -1,0 +1,11 @@
+= Dashboard Links
+The following links were found in http://192.168.8.94/ui2/dashboard2[WHA Dashboard], which content is available in `dashboardSample.html`.
+
+http://192.168.8.94/ui2/dashboard2/css/material.min.css[css/material.min.css]:: Stylesheet
+
+http://192.168.8.94/ui2/dashboard2/site.webmanifest[site.webmanifest]
+
+http://192.168.8.94/ui2/dashboard2/img/safari-pinned-tab.svg[mask-icon]
+
+http://192.168.8.94/ui2/dashboard2/browserconfig.xml[browserconfig.xml]
+
