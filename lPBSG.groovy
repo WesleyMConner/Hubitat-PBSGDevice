@@ -360,22 +360,24 @@ void PbsgChildVswEventHandler(Event e) {
       case 'on':
         if (pbsg.active != button) {
           // This reported event differs from the current PBSG state.
-          logInfo(
-            'PbsgChildVswEventHandler',
-            "${b(button)} VSW turned on .. activating")
+//          logInfo(
+//            'PbsgChildVswEventHandler',
+//            "${b(button)} VSW turned on .. activating"
+//          )
           pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
         } else {
-          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
+//          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
         }
         break
       case 'off':
         if (pbsg.lifo.contains(button)) {
-          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
+//          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
         } else {
           // This reported event differs from the current PBSG state.
-          logInfo(
-            'PbsgChildVswEventHandler',
-            "${b(button)} VSW turned off .. deactivating")
+//          logInfo(
+//            'PbsgChildVswEventHandler',
+//            "${b(button)} VSW turned off .. deactivating"
+//          )
           pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
         }
         break

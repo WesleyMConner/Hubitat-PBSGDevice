@@ -24,7 +24,7 @@ import groovy.json.JsonSlurper
 #include wesmc.lPBSG
 
 definition (
-  name: 'Demo-PBSG',
+  name: 'Demo-PBSG-device',
   namespace: 'wesmc',
   author: 'Wesley M. Conner',
   description: 'Demonstrate PushButtonSwitchGroup (PBSG) Functionality',
@@ -186,19 +186,19 @@ Map testSequencePage() {
         ArrayList testActions = getTestActions(pbsgName)
         solicitTestSequence(pbsgName, testActions)
       }
-      //input(
-      //  name: pauseForCallback,
-      //  title: [
-      //    h3("${b('Wait time')} (in milliseconds) for VSW Actions"),
-      //    '- When a Test Sequence turns a VSW on|off there is a delay',
-      //    '  before this App receives an event reporting the change.',
-      //    '- An overloaded Hubitat may require a longer delay.',
-      //  ],
-      //  type: number,
-      //  defaultValue: 200,
-      //  submitOnChange: true,
-      //  required: true
-      //)
+      input(
+        name: pauseForCallback,
+        title: [
+          h3("${b('Wait time')} (in milliseconds) for VSW Actions"),
+          '- When a Test Sequence turns a VSW on|off there is a delay',
+          '  before this App receives an event reporting the change.',
+          '- An overloaded Hubitat may require a longer delay.',
+        ],
+        type: number,
+        defaultValue: 200,
+        submitOnChange: true,
+        required: true
+      )
       paragraph(
         "Once 'Done' is pressed, the Test Sequence results should appear in the log."
       )
@@ -208,12 +208,12 @@ Map testSequencePage() {
 
 void installed() {
   unsubscribe()
-  initialize()
+  //initialize()
 }
 
 void updated() {
   unsubscribe()
-  initialize()
+  //initialize()
 }
 
 void uninstalled() {
@@ -231,17 +231,28 @@ void initialize() {
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
-    // CREATE THE PBSG INSTANCE
-    //   - Here, the PBSG configuration is solicted from user input
-    //   - It is possible to provide configuration by brute force:
-    //     Map config = {
-    //           name: ...,            // The name of the PBSG
-    //            all: ...,            // ArrayList of button names
-    //       instType: ...,            // 'pbsg' in most cases
-    //           dflt: ...             // The default button name
-    //     }
+    logWarn('initialize', "Creating PBSG ${b(pbsgName)}")
     Map pbsgConfig = gatherPbsgStateFromConfig(pbsgName)
-    Map pbsg = pbsg_BuildToConfig(pbsgConfig)
+    // Create the PBSG
+    String pbsgDni = "PBSG_${pbsgName}"             // No ws (Alexa et al)
+    //String pbsgName = pbsgDni.replaceAll('_', ' ')  // No special chars
+    DevW oldDevW = getChildDevice(pbsgDni)
+    if (oldDevW) {
+      logInfo('initialize', "Deleting prior DNI: ${pbsgDni}" )
+      deleteChildDevice(pbsgDni)
+    }
+    logInfo('initialize', "Creating new DNI: ${pbsgDni}" )
+    d = addChildDevice(
+      'wesmc',   // namespace
+      'PBSG',    // typeName
+      pbsgDni,   // Device Network Identifier (<pbsgName>_<button>)
+      [
+        isComponent: false,     // Bound to PBSG
+               name: pbsgName,
+              label: pbsgName,
+      ]
+    )
+    /*
     // BUILD AND RUN ANY TEST SEQUENCES
     String testSeqKey = "${pbsgName}_TestSequence"
     String testSeqJson = settings."${testSeqKey}"
@@ -270,7 +281,7 @@ void initialize() {
               logInfo('initialize', "Turning VSW ${vswDni} on")
               DevW vsw = getChildDevice(vswDni)
               vsw.on()
-              pauseExecution(400) // Pause for pbsg_ButtonOnCallback()
+              pauseExecution(200) // Pause for pbsg_ButtonOnCallback()
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             case 'VswOff':
@@ -279,7 +290,7 @@ void initialize() {
               logInfo('initialize', "Turning VSW ${vswDni} off")
               DevW vsw = getChildDevice(vswDni)
               vsw.off()
-              pauseExecution(400) // Wait for callback
+              pauseExecution(settings.pauseForCallback) // Wait for callback
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
@@ -295,6 +306,7 @@ void initialize() {
         }
       }
     }
+    */
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
   /*

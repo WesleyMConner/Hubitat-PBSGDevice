@@ -1,0 +1,122 @@
+// ---------------------------------------------------------------------------------
+// P ( U S H )   B ( U T T O N )   S ( W I T C H )   G ( R O U P )
+//
+// Copyright (C) 2023-Present Wesley M. Conner
+//
+// LICENSE
+// Licensed under the Apache License, Version 2.0 (aka Apache-2.0, the
+// "License"), see http://www.apache.org/licenses/LICENSE-2.0. You may
+// not use this file except in compliance with the License. Unless
+// required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied.
+// ---------------------------------------------------------------------------------
+// Referenced types below
+//   - import com.hubitat.app.DeviceWrapper as DevW
+//   - import com.hubitat.hub.domain.Event as Event
+//   - import java.util.ArrayList
+// The following are required when using this library.
+//   - #include wesmc.lUtils
+
+library(
+  name: 'lPBSG-app',
+  namespace: 'wesmc',
+  author: 'Wesley M. Conner',
+  description: 'Push Button Switch Group (PBSG) Implementation',
+  category: 'general purpose'
+)
+
+//// ------------------------------------------
+//// UI SUPPORT FOR SOLICITING PBSG CONFIG DATA
+//// ------------------------------------------
+
+ArrayList buttonStringToButtonList(String buttonsSettingsKey) {
+  String buttons = settings."${buttonsSettingsKey}"
+  return buttons?.tokenize(' ')
+}
+
+void solicitPbsgConfig(String pbsgName) {
+  // OVERVIEW
+  //   - This method is called from within a page section{...}
+  //   - The client first populates the names of the PBSG buttons.
+  //   - Once the list of buttons exists, the user selects a
+  //     default (dflt) button or 'not applicable'
+  //   - All exposed fields can be edited until data entry is "Done".
+  paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
+  // Tokenize the space-delimited buttons to produdce a list of buttons
+  ArrayList buttonList = buttonStringToButtonList("${pbsgName}_allSettingsKey")
+  Integer buttonCount = buttonList?.size()
+  // Adjust the title (heading) to provide feedback to the client.
+  ArrayList heading = []
+  switch (buttonCount) {
+    case 1:
+      heading << h1('Oops only one button was detected')
+      heading << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+      // Deliberately fall through to the next case!
+    case null:
+      heading << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+      heading << i("Enter button names ${b('delimited with spaces ')}")
+      break
+    default:
+      heading << h2("Button names for PBSG ${b(pbsgName)}")
+      heading << i('button names are delimited with spaces')
+  }
+  input(
+    name: "${pbsgName}_allSettingsKey",
+    title: heading.join('<br/>'),
+    type: 'text',
+    submitOnChange: true,
+    required: true
+  )
+  if (buttonCount > 2) {
+    input(
+      name: "${pbsgName}_dfltSettingsKey",
+      title: "Default Button for ${b(pbsgName)}:",
+      type: 'enum',
+      submitOnChange: true,
+      required: true,                 // Ensures user makes a selection!
+      multiple: false,
+      options: [*buttonList, 'not applicable']
+    )
+  }
+}
+
+Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg') {
+  // Builds/Rebuilds a PBSG instance from soicited state AND invokes
+  // pbsg_BuildToConfig(pbsg) - saving the results to atomicState.
+  Map result = [:]
+  if (pbsgName) {
+    String allSettingsKey = "${pbsgName}_allSettingsKey"
+    ArrayList allViaSettings = buttonStringToButtonList(allSettingsKey)
+    String dfltViaSettings = (settings."${pbsgName}_dfltSettingsKey" == 'not applicable')
+      ? null
+      : settings."${pbsgName}_dfltSettingsKey"
+    if (allViaSettings) {
+      // A minimal PBSG configuration Map exists
+      result = [
+        name: pbsgName,
+        all: allViaSettings,
+        instType: instType,
+        dflt: dfltViaSettings
+      ]
+      // Do warn that no default button was specified
+      if (!dfltViaSettings) {
+        logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
+      }
+    } else {
+      // Insufficient data exists for a PBSG configuration Map
+      String allString = settings."${allSettingsKey}"
+      logError('pbsg_CollectSolicitedConfig', [
+        '',
+        "Found null for ${b('all')} buttons",
+        "At settings.${allSettingsKey}: >${allString}<"
+      ])
+      // Also warn if no default button was found
+      if (!dfltViaSettings) {
+        logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
+      }
+    }
+  }
+  return result
+}
