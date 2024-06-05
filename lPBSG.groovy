@@ -27,14 +27,22 @@ library(
   category: 'general purpose'
 )
 
-//// ------------------------------------------
-//// UI SUPPORT FOR SOLICITING PBSG CONFIG DATA
-//// ------------------------------------------
+// -------
+// UTILITY
+// -------
 
 ArrayList buttonStringToButtonList(String buttonsSettingsKey) {
   String buttons = settings."${buttonsSettingsKey}"
   return buttons?.tokenize(' ')
 }
+
+String switchState(DevW d) {
+  return d.currentValue('switch', true) // true -> Do not use the cache
+}
+
+// --------------
+// APP UI SUPPORT
+// --------------
 
 void solicitPbsgConfig(String pbsgName) {
   // OVERVIEW
@@ -82,6 +90,75 @@ void solicitPbsgConfig(String pbsgName) {
   }
 }
 
+// --------
+// FETCHERS
+// --------
+
+DevW getOrCreatePBSG(String pbsgName) {
+  String dni = "PBSG_${pbsgName}"        // Delim '_' avoids whitespace
+  String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
+  // Device Network Identifiers DO NOT include white space.
+  // Device Names (exposed to Alexa ...) DO NOT include special characters.
+  DevW d = getChildDevice(dni)
+  if (!d) {
+    logWarn('getOrCreatePBSG', "Creating PBSG ${b(dni)}")
+    d = addChildDevice(
+      'wesmc',   // namespace
+      'PBSG',    // typeName
+      dni,       // Device Network Identifier (<pbsgName>_<button>)
+      [
+        isComponent: true,   // Lifecycle is tied to parent
+        name: name,          // "PBSG <pbsgName>"
+        label: name          // "PBSG <pbsgName>"
+      ]
+    )
+  }
+  return d
+}
+
+DevW getOrCreateVswWithToggle(String pbsgName, String button) {
+  // Device Network Identifiers DO NOT include white space.
+  // Device Names (exposed to Alexa ...) DO NOT include special characters.
+  String dni = "${pbsgName}_${button}"
+  String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
+  DevW d = getChildDevice(dni)
+  if (!d) {
+    logWarn('getOrCreateVswWithToggle', "Creating VswWithToggle ${b(dni)}")
+    d = addChildDevice(
+      'wesmc',           // namespace
+      'VswWithToggle',   // typeName
+      dni,               // Device Network Identifier (<pbsgName>_<button>)
+      [
+        isComponent: true,   // Lifecycle is tied to parent
+        name: name,          // "PBSG <pbsgName>"
+        label: name          // "PBSG <pbsgName>"
+      ]
+    )
+  }
+  return d
+}
+
+// ------------------
+// PBSG TO/FROM STATE
+// ------------------
+
+Map getPbsgState(String pbsgName) {
+  return atomicState."${pbsgName}"
+}
+
+void putPbsgState(Map pbsg) {
+  // Save the PBSG to atomicState
+  atomicState."${pbsg.name}" = pbsg
+  // Ensure child VSWs are on|off consistent with the PBSG state
+  pbsg_ReconcileVswsToState(pbsg)
+  // Invoke the client's callback function to consume the latest changes.
+  pbsg_ButtonOnCallback(pbsg)
+}
+
+// ---------------------------
+// EXTRACT STATE FROM SETTINGS
+// ---------------------------
+
 Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg') {
   // Builds/Rebuilds a PBSG instance from soicited state AND invokes
   // pbsg_BuildToConfig(pbsg) - saving the results to atomicState.
@@ -121,30 +198,39 @@ Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg') {
   return result
 }
 
-//// ------------------------------------
-//// CONVENIENCE METHODS ON PBSG INSTANCE
-//// ------------------------------------
-
-String switchState(DevW d) {
-  return d.currentValue('switch', true) // true -> Do not use the cache
+Map pbsg_BuildToConfig(Map pbsg) {
+  // This method (re-)builds a PBSG and writes it to atomicState
+  // Parameter Assumptions:
+  //   The supplied Map (pbsg) IS NOT null and includes:
+  //     - pbsg.name which IS NOT null
+  //     - pbsg.all which IS NOT null and IS an ArrayList of button names
+  pbsg.lifo = []
+  // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
+  // based on the current state of any discovered VSWs.
+  pbsg.all.each { button ->
+    if (button) {
+      DevW vsw = getOrCreateVswWithToggle(pbsg.name, button)
+      pbsg.lifo.push(button)
+      if (switchState(vsw) == 'on') {
+        // Move the button from the LIFO to active
+        logInfo('pbsg_BuildToConfig', "Found VSW ${dni} (${b('on')})")
+        pbsg_ActivateButton(pbsg, button)
+      } else {
+        logInfo('pbsg_BuildToConfig', "VSW ${dni} (${i('off')})")
+      }
+      subscribe(vsw, 'switch', PbsgChildVswEventHandler, ['filterEvents': true])
+    } else {
+      logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
+    }
+  }
+  if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
+  putPbsgState(pbsg)  // Save to atomicState and issue client callback
+  return pbsg
 }
 
-//// --------------------------------------------------------------
-//// OPERATIONS ON A PBSG INSTANCE (a Map persisted to AtomicState)
-//// --------------------------------------------------------------
-
-Map getPbsgState(String pbsgName) {
-  return atomicState."${pbsgName}"
-}
-
-void putPbsgState(Map pbsg) {
-  // Save the PBSG to atomicState
-  atomicState."${pbsg.name}" = pbsg
-  // Ensure child VSWs are on|off consistent with the PBSG state
-  pbsg_ReconcileVswsToState(pbsg)
-  // Invoke the client's callback function to consume the latest changes.
-  pbsg_ButtonOnCallback(pbsg)
-}
+// ---------------------------
+// PBSG STATE CHANGING METHODS
+// ---------------------------
 
 boolean pbsg_ActivateButton(Map pbsg, String button) {
   // Assumed: pbsg != null
@@ -196,44 +282,6 @@ boolean pbsg_DeactivateButton(Map pbsg, String button) {
   return result
 }
 
-DevW getOrCreateDevice(String dni) {
-  // Device Network Identifiers DO NOT include white space.
-  // Device Names (exposed to Alexa ...) DO NOT include special characters.
-  DevW d = getChildDevice(dni)
-  if (!d) {
-    logWarn('getOrCreateDevice', "Creating VSW ${b(dni)}")
-    d = addChildDevice(
-      'hubitat',         // namespace
-      'Virtual Switch',  // typeName
-      dni,               // Device Network Identifier (<pbsgName>_<button>)
-      [                  // properties
-        isComponent: true,
-        name: dni.replaceAll('_', ' ')  // "<pbsgName> <button>"
-      ]
-    )
-  }
-  return d
-}
-
-void pbsg_ReconcileVswsToState(Map pbsg) {
-  // Assumed: pbsg != null
-  // The supplied PBSG is used without making any changes to its state.
-  // Get or Create the child VSW for each button.
-  Map buttonToVsw = [:]
-  pbsg?.all.each{ button ->
-    String dni = "${pbsg.name}_${button}"
-    buttonToVsw << [ (button) : getOrCreateDevice(dni) ]
-  }
-  // Ensure VSW state matches button state.
-  buttonToVsw.each{ button, vsw ->
-    if (pbsg.active == button) {
-      if ( switchState(vsw) != 'on') { vsw.on() }
-    } else {
-      if ( switchState(vsw) != 'off') { vsw.off() }
-    }
-  }
-}
-
 boolean pbsg_ActivateLastActive(Map pbsg) {
   // Assumed: pbsg != null
   // -----------------------------------------------------------------
@@ -258,36 +306,29 @@ boolean pbsg_EnforceDefault(Map pbsg) {
   return result
 }
 
-Map pbsg_BuildToConfig(Map pbsg) {
-  // This method (re-)builds a PBSG and writes it to atomicState
-  // Parameter Assumptions:
-  //   The supplied Map (pbsg) IS NOT null and includes:
-  //     - pbsg.name which IS NOT null
-  //     - pbsg.all which IS NOT null and IS an ArrayList of button names
-  pbsg.lifo = []
-  // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
-  // based on the current state of any discovered VSWs.
-  pbsg.all.each { button ->
-    if (button) {
-      String dni = "${pbsg.name}_${button}"
-      DevW vsw = getOrCreateDevice(dni)
-      pbsg.lifo.push(button)
-      if (switchState(vsw) == 'on') {
-        // Move the button from the LIFO to active
-        logInfo('pbsg_BuildToConfig', "Found VSW ${dni} (${b('on')})")
-        pbsg_ActivateButton(pbsg, button)
-      } else {
-        logInfo('pbsg_BuildToConfig', "VSW ${dni} (${i('off')})")
-      }
-      subscribe(vsw, 'switch', PbsgChildVswEventHandler, ['filterEvents': true])
+void pbsg_ReconcileVswsToState(Map pbsg) {
+  // Assumed: pbsg != null
+  // The supplied PBSG is used without making any changes to its state.
+  // Get or Create the child VSW for each button.
+  Map buttonToVsw = [:]
+  pbsg?.all.each{ button ->
+    buttonToVsw << [ (button) : getOrCreateVswWithToggle(pbsg.name, button) ]
+  }
+  // Ensure VSW state matches button state.
+  buttonToVsw.each{ button, vsw ->
+    if (pbsg.active == button) {
+      if ( switchState(vsw) != 'on') { vsw.on() }
     } else {
-      logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
+      if ( switchState(vsw) != 'off') { vsw.off() }
     }
   }
-  if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
-  putPbsgState(pbsg)  // Save to atomicState and issue client callback
-  return pbsg
 }
+
+
+// -----------------------------
+// PBSG STATE VISIBILITY METHODS
+// -----------------------------
+
 
 String pbsg_ButtonState(Map pbsg, String button) {
   // Assumed: pbsg != null
@@ -332,66 +373,68 @@ String pbsg_State(Map pbsg) {
   return result
 }
 
-//// PBSG EVENT HANDLER
+// ------------------
+// NO LONGER REQUIRED
+// ------------------
 
-void PbsgChildVswEventHandler(Event e) {
-  // This handler processes VSW changes, including:
-  //   - Changes made by this application - see pbsg_ReconcileVswsToState()
-  //   - Changes made externally by the Hubitat GUI, Alexa, etc.
-  // An event's displayName (e.displayName) is the "name" of the VSW
-  // which differs from the Device Network Id (DNI). Some care is
-  // required when tokenizing e.displayName.
-  //     Name Format: '${pbsgInstName} ${buttonName}'  ← note whitespace
-  //      DNI Format: '${pbsgInstName}_${buttonName}'  ← note underscore
-  // Some external sources generate back-to-back events:
-  //   - Lutron RadioRA (RA2) turns off one scene BEFORE turning on
-  //     the replacement scene.
-  //   - Lutron Caséta (PRO2) turns on scenes without turning off
-  //     predecessors.
-  // When this method makes a change to a PBSG instance, it commits
-  // changes to atomicState using putPbsgState() which ensures changes
-  // are reported to the client's callback function.
-  if (e.name == 'switch') {
-    ArrayList parsedName = e.displayName.tokenize(' ')
-    String pbsgName = parsedName[0]
-    String button = parsedName[1]
-    Map pbsg = getPbsgState(pbsgName)
-    switch (e.value) {
-      case 'on':
-        if (pbsg.active != button) {
-          // This reported event differs from the current PBSG state.
-//          logInfo(
-//            'PbsgChildVswEventHandler',
-//            "${b(button)} VSW turned on .. activating"
-//          )
-          pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
-        } else {
-//          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
-        }
-        break
-      case 'off':
-        if (pbsg.lifo.contains(button)) {
-//          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
-        } else {
-          // This reported event differs from the current PBSG state.
-//          logInfo(
-//            'PbsgChildVswEventHandler',
-//            "${b(button)} VSW turned off .. deactivating"
-//          )
-          pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
-        }
-        break
-      default:
-        logError('PbsgChildVswEventHandler', ['',
-          e.descriptionText,
-          "Unexpected e.value: ${b(e.value)}",
-          eventDetails(e)
-        ].join('<br/>'))
-    }
-  } else {
-    logTrace(
-      'PbsgChildVswEventHandler',
-      "Ignoring ${eventDetails(e)}"
-    )
-  }
-}
+//-> void PbsgChildVswEventHandler(Event e) {
+//->   // This handler processes VSW changes, including:
+//->   //   - Changes made by this application - see pbsg_ReconcileVswsToState()
+//->   //   - Changes made externally by the Hubitat GUI, Alexa, etc.
+//->   // An event's displayName (e.displayName) is the "name" of the VSW
+//->   // which differs from the Device Network Id (DNI). Some care is
+//->   // required when tokenizing e.displayName.
+//->   //     Name Format: '${pbsgInstName} ${buttonName}'  ← note whitespace
+//->   //      DNI Format: '${pbsgInstName}_${buttonName}'  ← note underscore
+//->   // Some external sources generate back-to-back events:
+//->   //   - Lutron RadioRA (RA2) turns off one scene BEFORE turning on
+//->   //     the replacement scene.
+//->   //   - Lutron Caséta (PRO2) turns on scenes without turning off
+//->   //     predecessors.
+//->   // When this method makes a change to a PBSG instance, it commits
+//->   // changes to atomicState using putPbsgState() which ensures changes
+//->   // are reported to the client's callback function.
+//->   if (e.name == 'switch') {
+//->     ArrayList parsedName = e.displayName.tokenize(' ')
+//->     String pbsgName = parsedName[0]
+//->     String button = parsedName[1]
+//->     Map pbsg = getPbsgState(pbsgName)
+//->     switch (e.value) {
+//->       case 'on':
+//->         if (pbsg.active != button) {
+//->           // This reported event differs from the current PBSG state.
+//-> //          logInfo(
+//-> //            'PbsgChildVswEventHandler',
+//-> //            "${b(button)} VSW turned on .. activating"
+//-> //          )
+//->           pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
+//->         } else {
+//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
+//->         }
+//->         break
+//->       case 'off':
+//->         if (pbsg.lifo.contains(button)) {
+//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
+//->         } else {
+//->           // This reported event differs from the current PBSG state.
+//-> //          logInfo(
+//-> //            'PbsgChildVswEventHandler',
+//-> //            "${b(button)} VSW turned off .. deactivating"
+//-> //          )
+//->           pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
+//->         }
+//->         break
+//->       default:
+//->         logError('PbsgChildVswEventHandler', ['',
+//->           e.descriptionText,
+//->           "Unexpected e.value: ${b(e.value)}",
+//->           eventDetails(e)
+//->         ].join('<br/>'))
+//->     }
+//->   } else {
+//->     logTrace(
+//->       'PbsgChildVswEventHandler',
+//->       "Ignoring ${eventDetails(e)}"
+//->     )
+//->   }
+//-> }

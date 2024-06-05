@@ -23,28 +23,56 @@ metadata {
     importUrl: 'PENDING',
     singleThreaded: 'false'
   ) {
-    capability "Switch"     // switch: ['on'|'off'], on(), off()
-    capability "Momentary"  // push()
+    capability "Switch"     // Attribtes
+                            //   - switch: ['on'|'off']
+                            // Methods
+                            //   - on()
+                            //   - off()
+    capability "Momentary"  // Methods
+                            //   - push()
   }
   preferences {
-    input name: "logLevel", title: "Logging Threshold Level",
-      required: true,
-      type: "enum", options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
-      multiple: false, defaultValue: 'INFO'
+    input(
+      name: "logLevel",
+      title: "Logging Threshold Level",
+      type: "enum",
+      multiple: false,
+      options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
+      defaultValue: 'INFO',
+      required: true
+    )
   }
 }
 
 // Lifecycle methods
 
-void installed() { initialize() }
+void installed() {                          // Initial device configuration
+  setLogLevel(settings.logLevel)
+  logInfo('installed', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
 
-void uninstalled() { /* No action */ }
+void updated() {                            // Revised device configuration
+  setLogLevel(settings.logLevel)
+  logInfo('updated', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
 
-void updated() { initialize() }
+void uninstalled() {                                    // Tear down device
+  logInfo('uninstalled', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
 
-void initialize() { setLogLevel(logLevel) }
+void initialize() {                               // Begin device operation
+  logInfo('initialize', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
 
-// Externally-called methods
+// Methods Expected for Advertised Capabilities
 
 void on() { parent?.vswWithToggleOn(this.device) }
 
@@ -52,7 +80,7 @@ void off() { parent?.vswWithToggleOff(this.device) }
 
 void push() { parent?.vswWithTogglePush(this.device) }
 
-// Parent-directed actions
+// Supported, State-Changing Actions
 
 Event parse(String action) {
   // The String version of parse IS NOT supported

@@ -123,7 +123,7 @@ Map demoPbsg() {
     title: h1("TestPBSG (${app.id})"),
     uninstall: true
   ) {
-    atomicState.remove('null')
+    //-> atomicState.remove('null')
     section {
       input(
         name: 'pbsgNames',
@@ -266,20 +266,18 @@ void initialize() {
               break
             case 'VswOn':
               // Simulate an external VSW on
-              String vswDni = "${pbsg.name}_${target}"
-              logInfo('initialize', "Turning VSW ${vswDni} on")
-              DevW vsw = getChildDevice(vswDni)
+              DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
+              logInfo('initialize', "Turning ${vsw.name} on")
               vsw.on()
-              pauseExecution(400) // Pause for pbsg_ButtonOnCallback()
+              //-> pauseExecution(400) // Pause for pbsg_ButtonOnCallback()
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             case 'VswOff':
               // Simulate an external VSW off
-              String vswDni = "${pbsg.name}_${target}"
-              logInfo('initialize', "Turning VSW ${vswDni} off")
-              DevW vsw = getChildDevice(vswDni)
+              DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
+              logInfo('initialize', "Turning VSW ${vsw.name} off")
               vsw.off()
-              pauseExecution(400) // Wait for callback
+              //-> pauseExecution(400) // Wait for callback
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
