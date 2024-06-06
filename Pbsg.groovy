@@ -14,6 +14,8 @@
 // ---------------------------------------------------------------------------------
 #include wesmc.lUtils
 #include wesmc.lPBSG
+import groovy.json.JsonOutput    // Appears in wesmc.lPBSG
+import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 
 metadata {
   definition(
@@ -26,6 +28,8 @@ metadata {
   ) {
     // Closute per https://docs2.hubitat.com/en/developer/driver/overview with:
     // capabilities, commands, attributes, and/or fingerprints
+    capability "Configuration"   // Methods
+                                 //   - configure()
     capability "PushableButton"  // Attributes
                                  //   - numberOfButtons: number
                                  //   - pushed: number
@@ -40,8 +44,8 @@ metadata {
     //   - Are readable/writable on Hubitat's device drilldown page.
     //   - The settings function as configuration data for the driver.
     input(
-      name: 'buttonsString',
-      title: 'Space-delimited list of button names',
+      name: "${settingsKey('buttons')}",
+      title: "${b('Button Names')} (space delimited)",
       type: 'text',
       required: true
     )
@@ -49,29 +53,29 @@ metadata {
       name: 'numberOfButtons',
       title: 'Button count in buttonsString',
       type: 'number',
-      defaultValue: buttonsString?.tokenize(' ')?.size(),
+      defaultValue: getButtonNames()?.tokenize(' ')?.size(),
       required: true
     )
     input(
-      name: "dflt",
-      title: "Default button",
-      type: "enum",
+      name: 'dflt',
+      title: 'Default Button',
+      type: 'enum',
       multiple: false,
-      options: [*buttonNames?.tokenize(' '), 'not applicable'],
-      defaultValue: 'not applicable',
+      options: [*getButtonNames(), 'not_applicable'],
+      defaultValue: 'not_applicable',
       required: true
     )
     input(
-      name: "instType",
-      title: "Type of PBSG",
-      type: "text",
-      defaultValue: "pbsg",
+      name: 'instType',
+      title: 'Type of PBSG',
+      type: 'text',
+      defaultValue: 'pbsg',
       required: true
     )
     input(
-      name: "logLevel",
-      title: "Logging Threshold Level",
-      type: "enum",
+      name: 'logLevel',
+      title: 'Logging Threshold Level',
+      type: 'enum',
       multiple: false,
       options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
       defaultValue: 'INFO',
@@ -83,27 +87,41 @@ metadata {
 // Per https://docs2.hubitat.com/en/developer/driver/overview,
 // device data can be managed using state and/or atomicState
 
-void installed() {                          // Initial device configuration
-  setLogLevel(settings.logLevel)
+void installed() {
+  // Runs when driver is installed
+  //-> setLogLevel(settings.logLevel)
   logInfo('installed', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
-void updated() {                            // Revised device configuration
-  setLogLevel(settings.logLevel)
+void configure() {
+  // Runs due to presence of capability "Configuration"
+  //-> setLogLevel(settings.logLevel)
+  logInfo('configure', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
+
+void updated() {
+  // Runs when save is clicked in the preferences section
+  //-> setLogLevel(settings.logLevel)
   logInfo('updated', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
-void uninstalled() {                                    // Tear down device
+void uninstalled() {
+  // Runs on device tear down
+  //-> setLogLevel(settings.logLevel)
   logInfo('uninstalled', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
 void initialize() {                               // Begin device operation
+  // Runs when called, typically by installed() and updated()
+  //-> setLogLevel(settings.logLevel)
   logInfo('initialize', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))

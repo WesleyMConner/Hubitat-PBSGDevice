@@ -15,7 +15,8 @@
 // Referenced types below
 //   - import com.hubitat.app.DeviceWrapper as DevW
 //   - import com.hubitat.hub.domain.Event as Event
-//   - import java.util.ArrayList
+//   - import groovy.json.JsonOutput
+//   - import groovy.json.JsonSlurper
 // The following are required when using this library.
 //   - #include wesmc.lUtils
 
@@ -31,62 +32,187 @@ library(
 // UTILITY
 // -------
 
-ArrayList buttonStringToButtonList(String buttonsSettingsKey) {
-  String buttons = settings."${buttonsSettingsKey}"
-  return buttons?.tokenize(' ')
-}
-
 String switchState(DevW d) {
   return d.currentValue('switch', true) // true -> Do not use the cache
 }
 
-// --------------
-// APP UI SUPPORT
-// --------------
+String toJson(def thing) {
+  def output = new JsonOutput()
+  return output.toJson(thing)
+}
+
+/* groovylint-disable-next-line MethodReturnTypeRequired */
+def fromJson(String json) {
+  def result
+  if (json) {
+    def slurper = new JsonSlurper()
+    result = slurper.parseText(json)
+  }
+  return result
+}
+
+String dropNonUnderscoreSpecialChars(String s) {
+  return s?.replaceAll(/[\W_&&[^_ ]]/, '')
+}
+
+ArrayList extractCleanNames(String s) {
+  String cleanString = dropNonUnderscoreSpecialChars(s)
+  return cleanString?.tokenize(' ')
+}
+
+// -----------------------------------------------
+// UI DATA SOLICITATION AND OPERATIONS ON SETTINGS
+// -----------------------------------------------
+
+// +--------------------------------+--------------------------------|
+// |          APP CONTEXT           |         DEVICE CONTEXT         |
+// +--------------------------------+--------------------------------|
+// | Data is collected via input()  |  Data is set via sendEvent()   |
+// +--------------------------------+--------------------------------|
+// |              Data is read using settings."${key}"               |
+// +--------------------------------+--------------------------------|
+// |  A prefix is used in settings  |                                |
+// |     keys to allow data for     |   When collecting data for a   |
+// |     multiple devices to be     |  single device, prefix = null  |
+// |     collected concurrently     |                                |
+// +--------------------------------+--------------------------------|
+
+void solicitPbsgNames() {
+  input(
+    name: 'pbsgNames',
+    title: [
+      h3('Enter one or more PBSG Names'),
+      '- Separate names with spaces',
+      "- Avoid special characters in names, but '_' is allowed",
+      '- The names will used to create PBSG devices',
+      '- Use ⏎ to save your entry '
+    ].join('<br/>'),
+    type: 'text',
+    required: true,
+    submitOnChange: true
+  )
+}
+
+ArrayList getPbsgNames() {
+  //String raw = settings.pbsgNames
+  //return raw?.tokenize(' ')
+  //-> return raw?.tokenize(' ')
+  //-> logInfo('getPbsgNames#A', "raw: ${raw}")
+  //-> String clean = dropNonUnderscoreSpecialChars(raw)
+  //-> logInfo('getPbsgNames#B', "clean: ${clean}")
+  return extractCleanNames(settings.pbsgNames)
+}
+
+void solicitButtonNames(String prefix = null, Boolean dynamic = false) {
+  String header = "${b('Button Names')} (space delimited)"
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}Buttons",
+    title: "${h3(header)}",
+    type: 'text',
+    required: true,
+    submitOnChange: dynamic
+  )
+}
+
+ArrayList getButtonNames(String prefix = null) {
+  // Tokenize the space-delimited buttons to produce the ArrayList
+  String buttonNamesString = settings?."${prefix}Buttons"
+  return buttonNamesString?.tokenize(' ')
+}
+
+void solicitDefaultButton(String prefix = null, Boolean dynamic = false) {
+  String header = 'Default Button'
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}Dflt",
+    title: "${h3(header)}",
+    type: 'enum',
+    multiple: false,
+    options: [*getButtonNames(prefix), 'not_applicable'],
+    defaultValue: defaultButton(prefix) ?: 'not_applicable',
+    submitOnChange: dynamic,
+    required: true
+  )
+}
+
+String defaultButton(String prefix = null) {
+  return settings?."${prefix}Dflt"
+}
+
+void solicitNextAction(String prefix = null) {
+  String header = 'Add a Test Action'
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}NextAction",
+    title: "${h3(header)}",
+    type: 'enum',
+    options: getTestActions(prefix),
+    required: false,                 // Ensures user makes a selection!
+    width: 3,
+    submitOnChange: true
+  )
+}
+
+void removeNextAction(String prefix = null) {
+  app.removeSetting("${prefix}NextAction")
+}
+
+String getNextAction(String prefix = null) {
+  return settings?."${prefix}NextAction"
+}
+
+void solicitTestSequence(String testSequenceJson, String prefix = null) {
+  String header = 'Save the Test Sequence'
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}TestSequence",
+    title: "${h3(header)}",
+    type: 'textarea',
+    defaultValue: testSequenceJson,
+    required: true,
+    width: 9,
+    submitOnChange: true
+  )
+}
+
+void removeTestSequence(String prefix = null) {
+  app.removeSetting("${prefix}TestSequence")
+}
+
+ArrayList getTestSequence(String prefix = null) {
+  return fromJson(settings?."${prefix}TestSequence")
+}
 
 void solicitPbsgConfig(String pbsgName) {
   // OVERVIEW
-  //   - This method is called from within a page section{...}
+  //   - This method is called from within an App page section{...}
   //   - The client first populates the names of the PBSG buttons.
   //   - Once the list of buttons exists, the user selects a
-  //     default (dflt) button or 'not applicable'
+  //     default (dflt) button or 'not_applicable'
   //   - All exposed fields can be edited until data entry is "Done".
   paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
-  // Tokenize the space-delimited buttons to produdce a list of buttons
-  ArrayList buttonList = buttonStringToButtonList("${pbsgName}_allSettingsKey")
+  ArrayList buttonList = getButtonNames(pbsgName)
   Integer buttonCount = buttonList?.size()
-  // Adjust the title (heading) to provide feedback to the client.
-  ArrayList heading = []
+  // Provide feedback to the client (dynamically).
+  ArrayList feedback = []
   switch (buttonCount) {
     case 1:
-      heading << h1('Oops only one button was detected')
-      heading << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+      feedback << h1('Oops only one button was detected')
+      feedback << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
       // Deliberately fall through to the next case!
     case null:
-      heading << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
-      heading << i("Enter button names ${b('delimited with spaces ')}")
+      feedback << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+      feedback << i("Enter button names ${b('delimited with spaces ')}")
       break
     default:
-      heading << h2("Button names for PBSG ${b(pbsgName)}")
-      heading << i('button names are delimited with spaces')
+      feedback << h2("Button names for PBSG ${b(pbsgName)}")
+      feedback << i('button names are delimited with spaces')
   }
-  input(
-    name: "${pbsgName}_allSettingsKey",
-    title: heading.join('<br/>'),
-    type: 'text',
-    submitOnChange: true,
-    required: true
-  )
+  paragraph(h2(feedback.join('<br/>')))
+  solicitButtonNames(pbsgName, true)       // true → dynamic
   if (buttonCount > 2) {
-    input(
-      name: "${pbsgName}_dfltSettingsKey",
-      title: "Default Button for ${b(pbsgName)}:",
-      type: 'enum',
-      submitOnChange: true,
-      required: true,                 // Ensures user makes a selection!
-      multiple: false,
-      options: [*buttonList, 'not applicable']
-    )
+    solicitDefaultButton(pbsgName, true)   // true → dynamic
   }
 }
 
@@ -95,12 +221,20 @@ void solicitPbsgConfig(String pbsgName) {
 // --------
 
 DevW getOrCreatePBSG(String pbsgName) {
-  String dni = "PBSG_${pbsgName}"        // Delim '_' avoids whitespace
+  String dni = pbsgName   // Should NOT contain special chars except for '_'
   String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
   // Device Network Identifiers DO NOT include white space.
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
+  logInfo(
+    'getOrCreatePBSG#A', ['',
+      "pbsgName: ${pbsgName}",
+      "dni: ${dni}",
+      "name: ${name}"
+  ].join('<br/>'))
   DevW d = getChildDevice(dni)
-  if (!d) {
+  if (d) {
+    logInfo('getOrCreatePBSG#B', "d: ${d}")
+  } else {
     logWarn('getOrCreatePBSG', "Creating PBSG ${b(dni)}")
     d = addChildDevice(
       'wesmc',   // namespace
@@ -122,6 +256,13 @@ DevW getOrCreateVswWithToggle(String pbsgName, String button) {
   String dni = "${pbsgName}_${button}"
   String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
   DevW d = getChildDevice(dni)
+  logInfo('getOrCreateVswWithToggle#A', ['',
+    "pbsgName: ${pbsgName}",
+    "button: ${button}",
+    "dni: ${dni}",
+    "name: ${name}",
+    "d: ${d}"
+  ].join('<br/>'))
   if (!d) {
     logWarn('getOrCreateVswWithToggle', "Creating VswWithToggle ${b(dni)}")
     d = addChildDevice(
@@ -159,72 +300,72 @@ void putPbsgState(Map pbsg) {
 // EXTRACT STATE FROM SETTINGS
 // ---------------------------
 
-Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg') {
-  // Builds/Rebuilds a PBSG instance from soicited state AND invokes
-  // pbsg_BuildToConfig(pbsg) - saving the results to atomicState.
-  Map result = [:]
+Map gatherPbsgConfigFromSettings(String pbsgName, String instType = 'pbsg') {
+  // Collect data found in settings to produce a PBSG configuration Map.
+  Map config = [:]
   if (pbsgName) {
-    String allSettingsKey = "${pbsgName}_allSettingsKey"
-    ArrayList allViaSettings = buttonStringToButtonList(allSettingsKey)
-    String dfltViaSettings = (settings."${pbsgName}_dfltSettingsKey" == 'not applicable')
-      ? null
-      : settings."${pbsgName}_dfltSettingsKey"
-    if (allViaSettings) {
+    ArrayList buttonsFromSettings = getButtonNames(pbsgName)
+    //--debug-> logInfo('gatherPbsgConfigFromSettings#A', "buttonsFromSettings: ${buttonsFromSettings}")
+    String dfltFromSettings = defaultButton(pbsgName)
+    //--debug-> logInfo('gatherPbsgConfigFromSettings#B', "dfltFromSettings: ${dfltFromSettings}")
+    if (buttonsFromSettings) {
       // A minimal PBSG configuration Map exists
-      result = [
+      config = [
         name: pbsgName,
-        all: allViaSettings,
         instType: instType,
-        dflt: dfltViaSettings
+        buttons: buttonsFromSettings,
+        dflt: dfltFromSettings
       ]
+      //--debug-> logInfo('gatherPbsgConfigFromSettings#C', "config: ${config}")
       // Do warn that no default button was specified
-      if (!dfltViaSettings) {
+      if (!dfltFromSettings) {
         logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
       }
     } else {
       // Insufficient data exists for a PBSG configuration Map
-      String allString = settings."${allSettingsKey}"
-      logError('pbsg_CollectSolicitedConfig', [
-        '',
-        "Found null for ${b('all')} buttons",
-        "At settings.${allSettingsKey}: >${allString}<"
-      ])
-      // Also warn if no default button was found
-      if (!dfltViaSettings) {
-        logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
-      }
+      logError('gatherPbsgConfigFromSettings', 'getButtonNames(pbsg) produced null')
     }
   }
-  return result
+  return config
 }
 
-Map pbsg_BuildToConfig(Map pbsg) {
+Map pbsg_BuildToConfig(Map pbsgConfig) {
+  logInfo('pbsg_BuildToConfig#A', "pbsgConfig: ${pbsgConfig}")
   // This method (re-)builds a PBSG and writes it to atomicState
   // Parameter Assumptions:
   //   The supplied Map (pbsg) IS NOT null and includes:
   //     - pbsg.name which IS NOT null
   //     - pbsg.all which IS NOT null and IS an ArrayList of button names
-  pbsg.lifo = []
-  // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
-  // based on the current state of any discovered VSWs.
-  pbsg.all.each { button ->
-    if (button) {
-      DevW vsw = getOrCreateVswWithToggle(pbsg.name, button)
-      pbsg.lifo.push(button)
-      if (switchState(vsw) == 'on') {
-        // Move the button from the LIFO to active
-        logInfo('pbsg_BuildToConfig', "Found VSW ${dni} (${b('on')})")
-        pbsg_ActivateButton(pbsg, button)
+  DevW pbsg
+  //--debug-> logInfo('pbsg_BuildToConfig#A', "pbsgConfig: ${pbsgConfig}")
+  if (pbsgConfig.name) {
+    pbsg = getOrCreatePBSG(pbsgConfig.name)
+    logInfo('pbsg_BuildToConfig#B', "pbsg: ${pbsg}")
+    pbsg.lifo = []
+    //--debug-> logInfo('pbsg_BuildToConfig#C', pbsg_State(pbsg))
+    // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
+    // based on the current state of any discovered VSWs.
+    pbsg.all.each { button ->
+      if (button) {
+        DevW vsw = getOrCreateVswWithToggle(pbsg.name, button)
+        pbsg.lifo.push(button)
+        if (switchState(vsw) == 'on') {
+          // Move the button from the LIFO to active
+          //--debug-> logInfo('pbsg_BuildToConfig#D', "Found VSW ${vsw.name} (${b('on')})")
+          pbsg_ActivateButton(pbsg, button)
+        } else {
+          //--debug-> logInfo('pbsg_BuildToConfig#E', "VSW ${vsw.name} (${i('off')})")
+        }
+        //--debug-> logInfo('pbsg_BuildToConfig#F', pbsg_State(pbsg))
       } else {
-        logInfo('pbsg_BuildToConfig', "VSW ${dni} (${i('off')})")
+        logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
       }
-      subscribe(vsw, 'switch', PbsgChildVswEventHandler, ['filterEvents': true])
-    } else {
-      logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
     }
+    if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
+    putPbsgState(pbsg)  // Save to atomicState and issue client callback
+  } else {
+    logError('pbsg_BuildToConfig', 'pbsgConfig.name is null')
   }
-  if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
-  putPbsgState(pbsg)  // Save to atomicState and issue client callback
   return pbsg
 }
 
@@ -311,11 +452,11 @@ void pbsg_ReconcileVswsToState(Map pbsg) {
   // The supplied PBSG is used without making any changes to its state.
   // Get or Create the child VSW for each button.
   Map buttonToVsw = [:]
-  pbsg?.all.each{ button ->
+  pbsg?.all.each { button ->
     buttonToVsw << [ (button) : getOrCreateVswWithToggle(pbsg.name, button) ]
   }
   // Ensure VSW state matches button state.
-  buttonToVsw.each{ button, vsw ->
+  buttonToVsw.each { button, vsw ->
     if (pbsg.active == button) {
       if ( switchState(vsw) != 'on') { vsw.on() }
     } else {
@@ -324,11 +465,9 @@ void pbsg_ReconcileVswsToState(Map pbsg) {
   }
 }
 
-
 // -----------------------------
 // PBSG STATE VISIBILITY METHODS
 // -----------------------------
-
 
 String pbsg_ButtonState(Map pbsg, String button) {
   // Assumed: pbsg != null
@@ -361,80 +500,13 @@ String pbsg_State(Map pbsg) {
   //     to look like a FIFO.
   String result
   if (pbsg) {
-
     result = "${b(pbsg.name)}: "
     result += (pbsg.active) ? "${pbsg_ButtonState(pbsg, pbsg.active)} " : ''
     result += '← ['
-    result += pbsg.lifo.reverse().collect { button -> pbsg_ButtonState(pbsg, button) }.join(', ')
+    result += pbsg.lifo?.reverse().collect { button -> pbsg_ButtonState(pbsg, button) }.join(', ')
     result += ']'
   } else {
     logError('pbsg_State', 'Received null PBSG parameter.')
   }
   return result
 }
-
-// ------------------
-// NO LONGER REQUIRED
-// ------------------
-
-//-> void PbsgChildVswEventHandler(Event e) {
-//->   // This handler processes VSW changes, including:
-//->   //   - Changes made by this application - see pbsg_ReconcileVswsToState()
-//->   //   - Changes made externally by the Hubitat GUI, Alexa, etc.
-//->   // An event's displayName (e.displayName) is the "name" of the VSW
-//->   // which differs from the Device Network Id (DNI). Some care is
-//->   // required when tokenizing e.displayName.
-//->   //     Name Format: '${pbsgInstName} ${buttonName}'  ← note whitespace
-//->   //      DNI Format: '${pbsgInstName}_${buttonName}'  ← note underscore
-//->   // Some external sources generate back-to-back events:
-//->   //   - Lutron RadioRA (RA2) turns off one scene BEFORE turning on
-//->   //     the replacement scene.
-//->   //   - Lutron Caséta (PRO2) turns on scenes without turning off
-//->   //     predecessors.
-//->   // When this method makes a change to a PBSG instance, it commits
-//->   // changes to atomicState using putPbsgState() which ensures changes
-//->   // are reported to the client's callback function.
-//->   if (e.name == 'switch') {
-//->     ArrayList parsedName = e.displayName.tokenize(' ')
-//->     String pbsgName = parsedName[0]
-//->     String button = parsedName[1]
-//->     Map pbsg = getPbsgState(pbsgName)
-//->     switch (e.value) {
-//->       case 'on':
-//->         if (pbsg.active != button) {
-//->           // This reported event differs from the current PBSG state.
-//-> //          logInfo(
-//-> //            'PbsgChildVswEventHandler',
-//-> //            "${b(button)} VSW turned on .. activating"
-//-> //          )
-//->           pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
-//->         } else {
-//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
-//->         }
-//->         break
-//->       case 'off':
-//->         if (pbsg.lifo.contains(button)) {
-//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
-//->         } else {
-//->           // This reported event differs from the current PBSG state.
-//-> //          logInfo(
-//-> //            'PbsgChildVswEventHandler',
-//-> //            "${b(button)} VSW turned off .. deactivating"
-//-> //          )
-//->           pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
-//->         }
-//->         break
-//->       default:
-//->         logError('PbsgChildVswEventHandler', ['',
-//->           e.descriptionText,
-//->           "Unexpected e.value: ${b(e.value)}",
-//->           eventDetails(e)
-//->         ].join('<br/>'))
-//->     }
-//->   } else {
-//->     logTrace(
-//->       'PbsgChildVswEventHandler',
-//->       "Ignoring ${eventDetails(e)}"
-//->     )
-//->   }
-//-> }

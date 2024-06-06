@@ -14,6 +14,8 @@
 // ---------------------------------------------------------------------------------
 #include wesmc.lUtils
 #include wesmc.lPBSG
+import groovy.json.JsonOutput    // Appears in wesmc.lPBSG
+import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 
 metadata {
   definition(
@@ -23,6 +25,8 @@ metadata {
     importUrl: 'PENDING',
     singleThreaded: 'false'
   ) {
+    capability "Configuration"   // Methods
+                                 //   - configure()
     capability "Switch"     // Attribtes
                             //   - switch: ['on'|'off']
                             // Methods
@@ -46,27 +50,43 @@ metadata {
 
 // Lifecycle methods
 
-void installed() {                          // Initial device configuration
+void installed() {
+  // Runs when driver is installed
+  //-> setLogLevel(settings.logLevel)
   setLogLevel(settings.logLevel)
   logInfo('installed', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
-void updated() {                            // Revised device configuration
-  setLogLevel(settings.logLevel)
+void configure() {
+  // Runs due to presence of capability "Configuration"
+  //-> setLogLevel(settings.logLevel)
+  logInfo('configure', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
+}
+
+
+void updated() {
+  // Runs when save is clicked in the preferences section
+  //-> setLogLevel(settings.logLevel)
   logInfo('updated', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
-void uninstalled() {                                    // Tear down device
+void uninstalled() {
+  // Runs on device tear down
+  //-> setLogLevel(settings.logLevel)
   logInfo('uninstalled', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
 }
 
-void initialize() {                               // Begin device operation
+void initialize() {
+  // Runs when called, typically by installed() and updated()
+  //-> setLogLevel(settings.logLevel)
   logInfo('initialize', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))

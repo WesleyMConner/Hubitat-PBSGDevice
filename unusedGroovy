@@ -1,0 +1,65 @@
+// ------------------
+// NO LONGER REQUIRED
+// ------------------
+
+//-> void PbsgChildVswEventHandler(Event e) {
+//->   // This handler processes VSW changes, including:
+//->   //   - Changes made by this application - see pbsg_ReconcileVswsToState()
+//->   //   - Changes made externally by the Hubitat GUI, Alexa, etc.
+//->   // An event's displayName (e.displayName) is the "name" of the VSW
+//->   // which differs from the Device Network Id (DNI). Some care is
+//->   // required when tokenizing e.displayName.
+//->   //     Name Format: '${pbsgInstName} ${buttonName}'  ← note whitespace
+//->   //      DNI Format: '${pbsgInstName}_${buttonName}'  ← note underscore
+//->   // Some external sources generate back-to-back events:
+//->   //   - Lutron RadioRA (RA2) turns off one scene BEFORE turning on
+//->   //     the replacement scene.
+//->   //   - Lutron Caséta (PRO2) turns on scenes without turning off
+//->   //     predecessors.
+//->   // When this method makes a change to a PBSG instance, it commits
+//->   // changes to atomicState using putPbsgState() which ensures changes
+//->   // are reported to the client's callback function.
+//->   if (e.name == 'switch') {
+//->     ArrayList parsedName = e.displayName.tokenize(' ')
+//->     String pbsgName = parsedName[0]
+//->     String button = parsedName[1]
+//->     Map pbsg = getPbsgState(pbsgName)
+//->     switch (e.value) {
+//->       case 'on':
+//->         if (pbsg.active != button) {
+//->           // This reported event differs from the current PBSG state.
+//-> //          logInfo(
+//-> //            'PbsgChildVswEventHandler',
+//-> //            "${b(button)} VSW turned on .. activating"
+//-> //          )
+//->           pbsg_ActivateButton(pbsg, button) && putPbsgState(pbsg)
+//->         } else {
+//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned on")
+//->         }
+//->         break
+//->       case 'off':
+//->         if (pbsg.lifo.contains(button)) {
+//-> //          logTrace('PbsgChildVswEventHandler', "Ignoring ${b(button)} turned off")
+//->         } else {
+//->           // This reported event differs from the current PBSG state.
+//-> //          logInfo(
+//-> //            'PbsgChildVswEventHandler',
+//-> //            "${b(button)} VSW turned off .. deactivating"
+//-> //          )
+//->           pbsg_DeactivateButton(pbsg, button) && putPbsgState(pbsg)
+//->         }
+//->         break
+//->       default:
+//->         logError('PbsgChildVswEventHandler', ['',
+//->           e.descriptionText,
+//->           "Unexpected e.value: ${b(e.value)}",
+//->           eventDetails(e)
+//->         ].join('<br/>'))
+//->     }
+//->   } else {
+//->     logTrace(
+//->       'PbsgChildVswEventHandler',
+//->       "Ignoring ${eventDetails(e)}"
+//->     )
+//->   }
+//-> }

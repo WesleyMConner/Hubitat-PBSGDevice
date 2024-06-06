@@ -46,7 +46,7 @@ void pbsg_ButtonOnCallback(Map pbsg) {
 
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
-  ArrayList buttons = buttonStringToButtonList("${pbsgName}_allSettingsKey")
+  ArrayList buttons = getButtonNames(pbsgName)
   ArrayList testActions = new ArrayList()
   buttons.each{ b ->
     testActions << "${b}_ButtonOn"
@@ -59,61 +59,32 @@ ArrayList getTestActions(String pbsgName) {
   return testActions
 }
 
-String toJson (def thing) {
-  def output = new JsonOutput()
-  return output.toJson(thing)
-}
-
-def fromJson (String json) {
-  if (!json) return null
-  def slurper = new JsonSlurper()
-  return slurper.parseText(json)
-}
-
-void solicitTestSequence(String pbsgName, ArrayList testOptions) {
-  String testSeqKey = "${pbsgName}_TestSequence"
-  String testSeqJson = settings."${testSeqKey}"
-  ArrayList testSeqList = fromJson(testSeqJson) ?: []
+void buildTestSequence(String pbsgName, ArrayList testOptions) {
+  ArrayList testSeqList = getTestSequence(pbsgName) ?: []
   // Add the most recent 'next action' to the 'test sequence'.
-  String nextActionKey = "${pbsgName}_NextTestAction"
-  String nextAction = settings."${nextActionKey}"
+  String nextAction = getNextAction(pbsgName)
+  //-> logInfo('buildTestSequence#A', ['',
+  //->   "pbsgName: ${pbsgName}",
+  //->   "nextAction: ${nextAction}",
+  //->   "testSeqList: ${testSeqList}"
+  //-> ].join('<br/>'))
   if (nextAction) {
     testSeqList.add(nextAction)
-    testSeqJson = toJson(testSeqList)
-    // Clear prior settings and re-solicit below.
-    app.removeSetting(testSeqKey)
-    app.removeSetting(nextActionKey)
+    //-> logInfo('buildTestSequence#B', ['',
+    //->   "pbsgName: ${pbsgName}",
+    //->   "testSeqList: ${testSeqList}"
+    //-> ].join('<br/>'))
   }
-  input(
-    name: nextActionKey,
-    title: "Add a ${b(pbsgName)} Test Action:",
-    type: 'enum',
-    submitOnChange: true,
-    required: false,                 // Ensures user makes a selection!
-    width: 3,
-    options: getTestActions(pbsgName)
-  )
-  settings."${testSeqKey}" = testSeqJson
-  app.removeSetting(testSeqKey)
-  input(
-    name: testSeqKey,
-    title: "Save ${b(pbsgName)} Test Sequence",
-    type: 'textarea',
-    submitOnChange: true,
-    required: true,
-    width: 9,
-    defaultValue: testSeqJson
-  )
+  removeNextAction(pbsgName)
+  removeTestSequence(pbsgName)
+  solicitNextAction(pbsgName)
+  solicitTestSequence(toJson(testSeqList), pbsgName)
 }
 
 preferences {
   page(name: 'demoPbsg', nextPage: 'testActionsPage')
   page(name: 'testActionsPage', nextPage: 'testSequencePage')
   page(name: 'testSequencePage')
-}
-
-String getPbsgStateNames () {
-  return settings.pbsgNames?.tokenize(' ')
 }
 
 Map demoPbsg() {
@@ -123,21 +94,12 @@ Map demoPbsg() {
     title: h1("TestPBSG (${app.id})"),
     uninstall: true
   ) {
-    //-> atomicState.remove('null')
     section {
-      input(
-        name: 'pbsgNames',
-        title: [
-          h3("Enter one or more PBSG Names"),
-          '- Separate names with spaces',
-          '- Use ⏎ to save your entry '
-        ].join('<br/>'),
-        type: 'text',
-        submitOnChange: true,
-        required: true
-      )
-      ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
-      pbsgNames.each{ pbsgName -> solicitPbsgConfig(pbsgName) }
+      solicitPbsgNames()
+      ArrayList pbsgNames = getPbsgNames()
+      pbsgNames.each{ pbsgName ->
+        solicitPbsgConfig(pbsgName)
+      }
     }
   }
 }
@@ -184,21 +146,8 @@ Map testSequencePage() {
       ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
       pbsgNames.each{ pbsgName ->
         ArrayList testActions = getTestActions(pbsgName)
-        solicitTestSequence(pbsgName, testActions)
+        buildTestSequence(pbsgName, testActions)
       }
-      //input(
-      //  name: pauseForCallback,
-      //  title: [
-      //    h3("${b('Wait time')} (in milliseconds) for VSW Actions"),
-      //    '- When a Test Sequence turns a VSW on|off there is a delay',
-      //    '  before this App receives an event reporting the change.',
-      //    '- An overloaded Hubitat may require a longer delay.',
-      //  ],
-      //  type: number,
-      //  defaultValue: 200,
-      //  submitOnChange: true,
-      //  required: true
-      //)
       paragraph(
         "Once 'Done' is pressed, the Test Sequence results should appear in the log."
       )
@@ -232,20 +181,20 @@ void initialize() {
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
     // CREATE THE PBSG INSTANCE
-    //   - Here, the PBSG configuration is solicted from user input
-    //   - It is possible to provide configuration by brute force:
-    //     Map config = {
-    //           name: ...,            // The name of the PBSG
-    //            all: ...,            // ArrayList of button names
-    //       instType: ...,            // 'pbsg' in most cases
-    //           dflt: ...             // The default button name
-    //     }
-    Map pbsgConfig = gatherPbsgStateFromConfig(pbsgName)
+    //   - Gather a PBSG configuration Map from data in settings.
+    //   - Alternately, provide a PBSG configuration by brute force.
+    //     Map config = [
+    //           name: ...,  // The name of the PBSG
+    //       instType: ...,  // 'pbsg' in most cases
+    //        buttons: ...,  // ArrayList of button names
+    //           dflt: ...   // The default button name or null
+    //     ]
+    Map pbsgConfig = gatherPbsgConfigFromSettings(pbsgName)
+    logInfo('initialize', "pbsgConfig: ${pbsgConfig}")
     Map pbsg = pbsg_BuildToConfig(pbsgConfig)
+    logInfo('initialize', "pbsg: ${pbsg}")
     // BUILD AND RUN ANY TEST SEQUENCES
-    String testSeqKey = "${pbsgName}_TestSequence"
-    String testSeqJson = settings."${testSeqKey}"
-    ArrayList testSeqList = fromJson(testSeqJson)
+    ArrayList testSeqList = getTestSequence(pbsgName)
     Integer actionCnt = testSeqList.size()
     testSeqList?.eachWithIndex{ testAction, index ->
       logInfo('initialize', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
@@ -269,7 +218,6 @@ void initialize() {
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
               logInfo('initialize', "Turning ${vsw.name} on")
               vsw.on()
-              //-> pauseExecution(400) // Pause for pbsg_ButtonOnCallback()
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             case 'VswOff':
@@ -277,7 +225,6 @@ void initialize() {
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
               logInfo('initialize', "Turning VSW ${vsw.name} off")
               vsw.off()
-              //-> pauseExecution(400) // Wait for callback
               pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
