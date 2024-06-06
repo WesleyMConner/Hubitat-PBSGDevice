@@ -28,8 +28,8 @@ metadata {
   ) {
     // Closute per https://docs2.hubitat.com/en/developer/driver/overview with:
     // capabilities, commands, attributes, and/or fingerprints
-    capability "Configuration"   // Methods
-                                 //   - configure()
+    capability "Initialize"      // Methods
+                                 //   - initialize()
     capability "PushableButton"  // Attributes
                                  //   - numberOfButtons: number
                                  //   - pushed: number
@@ -44,7 +44,7 @@ metadata {
     //   - Are readable/writable on Hubitat's device drilldown page.
     //   - The settings function as configuration data for the driver.
     input(
-      name: "${settingsKey('buttons')}",
+      name: 'Buttons',
       title: "${b('Button Names')} (space delimited)",
       type: 'text',
       required: true
@@ -87,8 +87,11 @@ metadata {
 // Per https://docs2.hubitat.com/en/developer/driver/overview,
 // device data can be managed using state and/or atomicState
 
+initialize():
+parse(String desc): handles raw incoming data from Zigbee, Z-Wave, or LAN devices and generally creates events as needed; see example drivers for more (virtual devices generally do not demonstrate this behavior, as there is no data coming in from a real device)
+
 void installed() {
-  // Runs when driver is installed
+  // Called when device is first added
   //-> setLogLevel(settings.logLevel)
   logInfo('installed', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
@@ -98,13 +101,14 @@ void installed() {
 void configure() {
   // Runs due to presence of capability "Configuration"
   //-> setLogLevel(settings.logLevel)
-  logInfo('configure', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  logInfo('configure', 'at entry')
+  //logInfo('configure', ['',
+  //  settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //].join('<br/>'))
 }
 
 void updated() {
-  // Runs when save is clicked in the preferences section
+  // Called when user selects Save Preferences
   //-> setLogLevel(settings.logLevel)
   logInfo('updated', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
@@ -119,9 +123,12 @@ void uninstalled() {
   ].join('<br/>'))
 }
 
-void initialize() {                               // Begin device operation
-  // Runs when called, typically by installed() and updated()
+void initialize() {
+  // Called on hub startup (if driver specifies capability "Initialize")
+  // Otherwise: It is not required or automatically called if present.
   //-> setLogLevel(settings.logLevel)
+  this.label
+  this.id
   logInfo('initialize', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
@@ -179,11 +186,21 @@ void push(Integer buttonNumber) {
 // Supported, State-Changing Actions
 
 void parse(String text) {
-  logWarn('parse', "parse(String) ignored:<br/>'${text}'<")
+  // Exposed externally
+  switch (text) {
+    case 'alpha':
+    case 'beta':
+    case 'gamma':
+      logInfo('parse', "Recognized >${text}<")
+      break
+    default:
+      logInfo('parse', "Rejected >${text}<")
+  }
   return null
 }
 
 void parse(ArrayList actions) {
+  // This implementation is for component devices and their parents.
   logWarn('parse', ['parse(ArrayList) ignored:',
     actions.join('<br/>')
   ].join('<br/>'))

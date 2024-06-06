@@ -284,10 +284,12 @@ DevW getOrCreateVswWithToggle(String pbsgName, String button) {
 // ------------------
 
 Map getPbsgState(String pbsgName) {
+  logInfo('getPbsgState}', 'At entry')
   return atomicState."${pbsgName}"
 }
 
 void putPbsgState(Map pbsg) {
+  logInfo('putPbsgState}', 'At entry')
   // Save the PBSG to atomicState
   atomicState."${pbsg.name}" = pbsg
   // Ensure child VSWs are on|off consistent with the PBSG state
@@ -341,7 +343,11 @@ Map pbsg_BuildToConfig(Map pbsgConfig) {
   if (pbsgConfig.name) {
     pbsg = getOrCreatePBSG(pbsgConfig.name)
     logInfo('pbsg_BuildToConfig#B', "pbsg: ${pbsg}")
-    pbsg.lifo = []
+    pbsg.parse('alpha')
+    pbsg.parse('beta')
+    pbsg.parse('gamma')
+    pbsg.parse('delta')
+    pbsg.parse('epsilon')
     //--debug-> logInfo('pbsg_BuildToConfig#C', pbsg_State(pbsg))
     // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
     // based on the current state of any discovered VSWs.
