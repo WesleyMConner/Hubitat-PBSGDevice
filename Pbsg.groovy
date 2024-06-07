@@ -17,6 +17,32 @@
 import groovy.json.JsonOutput    // Appears in wesmc.lPBSG
 import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 
+// OVERVIEW
+//   Conceptually, a PBSG has:
+//     buttons - An ArrayList of all the buttons managed by the PBSG
+//      active - The button that is currently 'on'
+//               (can be null if there is no dflt button)
+//        dflt - The button that is turned 'on' if active becomes null
+//               (can be 'not_applicable')
+//        lifo - The list of 'off' buttons where the most recently
+//               turned off button is the "last in" - facilitating
+//               the "activateLastActive" command.
+//   State is managed The following summarizes a PBSG's state:
+//     [
+//                 active: STRING
+//                 pushed: INTEGER    (expected per PushableButton)
+//                   lifo: ARRAYLIST
+//                buttons: ARRAYLIST  (redundant for convenience)
+//        numberOfButtons: INTEGER    (expected per PushableButton)
+//                display: STRING     (redundant see below)
+//     ]
+//   IMPORTANT
+//     The ARRAYLIST implementation of "lifo" is inverted.
+//       - push() is expected to PREPEND an item which pop() will retrieve
+//       - instead push() APPENDS an item which pop() retrieves
+//     The 'display' STRING exists as a convenience. It provides a visual
+//     summary active & lifo (so is fully redundant with respect to state).
+
 metadata {
   definition(
     // Map keys per https://docs2.hubitat.com/en/developer/driver/overview
@@ -28,18 +54,37 @@ metadata {
   ) {
     // Closute per https://docs2.hubitat.com/en/developer/driver/overview with:
     // capabilities, commands, attributes, and/or fingerprints
-    capability "Initialize"      // Methods
+    capability 'Initialize'      // implied commands:
                                  //   - initialize()
-    capability "PushableButton"  // Attributes
+    capability 'PushableButton'  // implied attributes:
                                  //   - numberOfButtons: number
                                  //   - pushed: number
-                                 // Methods
+                                 // implied commands:
                                  //   - push(number)
-    // command "configure"
+    capability 'Refresh'         // implied commands:
+                                 //   - refresh()
+    command 'configure', ['json_object']
+    command 'configure', [[
+      name:'config*',
+      type:'JSON_OBJECT',
+      description:'toJson([String instType, ArrayList buttons, String dflt])'
+    ]]
+    command 'activate', [[
+      name: 'button',
+      type: 'STRING',
+      description: 'The button name to activate'
+    ]]
+    command 'deactivate', [[
+      name: 'button',
+      type: 'STRING',
+      description: 'The button name to deactivate'
+    ]]
+    command 'activateLastActive', [[ /* no arguments */ ]]
+
     // attribute "tbd"
   }
   preferences {
-    // The following inputs:
+    // The following inputs drive application configuration:
     //   - Correspond to settings."${name}" (or `name` for short).
     //   - Are readable/writable on Hubitat's device drilldown page.
     //   - The settings function as configuration data for the driver.
@@ -87,9 +132,6 @@ metadata {
 // Per https://docs2.hubitat.com/en/developer/driver/overview,
 // device data can be managed using state and/or atomicState
 
-initialize():
-parse(String desc): handles raw incoming data from Zigbee, Z-Wave, or LAN devices and generally creates events as needed; see example drivers for more (virtual devices generally do not demonstrate this behavior, as there is no data coming in from a real device)
-
 void installed() {
   // Called when device is first added
   //-> setLogLevel(settings.logLevel)
@@ -98,14 +140,13 @@ void installed() {
   ].join('<br/>'))
 }
 
+/*
 void configure() {
   // Runs due to presence of capability "Configuration"
   //-> setLogLevel(settings.logLevel)
   logInfo('configure', 'at entry')
-  //logInfo('configure', ['',
-  //  settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //].join('<br/>'))
 }
+*/
 
 void updated() {
   // Called when user selects Save Preferences
@@ -127,11 +168,46 @@ void initialize() {
   // Called on hub startup (if driver specifies capability "Initialize")
   // Otherwise: It is not required or automatically called if present.
   //-> setLogLevel(settings.logLevel)
-  this.label
-  this.id
   logInfo('initialize', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
+    Map pbsg = [
+      active: 'C',
+      pushed: 3,
+      lifo: ['E', 'A', 'B', 'D'],
+      buttons: ['A', 'B', 'C', 'D', 'E'],
+      numberOfButtons: 5,
+      display: 'Placeholder'
+    ]
+  //state.pbsg = pbsg
+  sendEvent(
+    name: 'pbsg',
+    value: pbsg,
+    unit: 'not_applicable',
+    descriptionText: 'active: C, button: 3',
+    isStateChange: true
+  )
+}
+
+void refresh() {
+  // On-demand state refresh per capability "Refresh"
+      Map pbsg = [
+      active: 'C',
+      pushed: 3,
+      lifo: ['E', 'A', 'B', 'D'],
+      buttons: ['A', 'B', 'C', 'D', 'E'],
+      numberOfButtons: 5,
+      display: 'Placeholder'
+    ]
+  //state.pbsg = pbsg
+  sendEvent(
+    name: 'pbsg',
+    value: pbsg,
+    unit: 'not_applicable',
+    descriptionText: 'active: C, button: 3',
+    isStateChange: false
+  )
+
 }
 
 // Process Methods on behalf of Child Devices
@@ -187,6 +263,13 @@ void push(Integer buttonNumber) {
 
 void parse(String text) {
   // Exposed externally
+  // Note:
+  //    parse(String desc) can handle raw incoming data from Zigbee,
+  //    Z-Wave, or LAN devices and generally creates events as needed;
+  //    see example drivers for more (virtual devices generally do not
+  //    demonstrate this behavior, as there is no data coming in from
+  //    a real device)
+
   switch (text) {
     case 'alpha':
     case 'beta':
