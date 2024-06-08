@@ -63,19 +63,24 @@ ArrayList extractCleanNames(String s) {
 // -----------------------------------------------
 // UI DATA SOLICITATION AND OPERATIONS ON SETTINGS
 // -----------------------------------------------
+//
+//   +------------+-----------------------+-----------------------|
+//   |    CONTEXT |          App          |        Device         |
+//   +------------|-----------------------+-----------------------|
+//   | WRITE DATA |      via input()      |    via sendEvent()    |
+//   +------------------------------------+-----------------------|
+//   |  READ DATA |             via settings."${key}"             |
+//   +------------+-----------------------+-----------------------|
+//   |   prefix = |    Populated with     |         null          |
+//   |            |    "${PbsgName}_"     |                       |
+//   +------------+-----------------------+-----------------------|
+//   |  dynamic = |      (device?.getName()) ? false : true       |
+//   |            |    [dynamic only applies in an App context]   |
+//   +------------+-----------------------+-----------------------|
 
-// +--------------------------------+--------------------------------|
-// |          APP CONTEXT           |         DEVICE CONTEXT         |
-// +--------------------------------+--------------------------------|
-// | Data is collected via input()  |  Data is set via sendEvent()   |
-// +--------------------------------+--------------------------------|
-// |              Data is read using settings."${key}"               |
-// +--------------------------------+--------------------------------|
-// |  A prefix is used in settings  |                                |
-// |     keys to allow data for     |   When collecting data for a   |
-// |     multiple devices to be     |  single device, prefix = null  |
-// |     collected concurrently     |                                |
-// +--------------------------------+--------------------------------|
+Boolean isDynamic() {
+  return (device?.getName()) ? false : true
+}
 
 void solicitPbsgNames() {
   input(
@@ -103,11 +108,11 @@ ArrayList getPbsgNames() {
   return extractCleanNames(settings.pbsgNames)
 }
 
-void solicitButtonNames(String prefix = null, Boolean dynamic = false) {
+void solicitButtonNames(String prefix = null) {
   String header = "${b('Button Names')} (space delimited)"
   if (prefix) { header << "for ${prefix}" }
   input(
-    name: "${prefix}Buttons",
+    name: "${prefix}buttons",
     title: "${h3(header)}",
     type: 'text',
     required: true,
@@ -117,71 +122,71 @@ void solicitButtonNames(String prefix = null, Boolean dynamic = false) {
 
 ArrayList getButtonNames(String prefix = null) {
   // Tokenize the space-delimited buttons to produce the ArrayList
-  String buttonNamesString = settings?."${prefix}Buttons"
+  String buttonNamesString = settings?."${prefix}buttons"
   return buttonNamesString?.tokenize(' ')
 }
 
-void solicitDefaultButton(String prefix = null, Boolean dynamic = false) {
+void solicitDefaultButton(String prefix = null) {
   String header = 'Default Button'
   if (prefix) { header << "for ${prefix}" }
   input(
-    name: "${prefix}Dflt",
+    name: "${prefix}dflt",
     title: "${h3(header)}",
     type: 'enum',
     multiple: false,
     options: [*getButtonNames(prefix), 'not_applicable'],
     defaultValue: defaultButton(prefix) ?: 'not_applicable',
-    submitOnChange: dynamic,
+    submitOnChange: isDynamic(),
     required: true
   )
 }
 
 String defaultButton(String prefix = null) {
-  return settings?."${prefix}Dflt"
+  return settings?."${prefix}dflt"
 }
 
-void solicitNextAction(String prefix = null) {
+void solicitNextAction(String pbsgName) {
   String header = 'Add a Test Action'
-  if (prefix) { header << "for ${prefix}" }
+  if (pbsgName) { header << "for ${pbsgName}" }
   input(
-    name: "${prefix}NextAction",
+    name: "${pbsgName}_nextAction",
     title: "${h3(header)}",
     type: 'enum',
-    options: getTestActions(prefix),
+    options: getTestActions(pbsgName),
     required: false,                 // Ensures user makes a selection!
     width: 3,
-    submitOnChange: true
+    submitOnChange: isDynamic()
   )
 }
 
-void removeNextAction(String prefix = null) {
-  app.removeSetting("${prefix}NextAction")
+void removeNextAction(String pbsgName) {
+  app.removeSetting("${pbsgName}_nextAction")
 }
 
-String getNextAction(String prefix = null) {
-  return settings?."${prefix}NextAction"
+String getNextAction(String pbsgName) {
+  return settings?."${pbsgName}_nextAction"
 }
 
-void solicitTestSequence(String testSequenceJson, String prefix = null) {
+void solicitTestSequence(String testSequenceJson, String pbsgName) {
   String header = 'Save the Test Sequence'
-  if (prefix) { header << "for ${prefix}" }
+  if (prefix) { header << "for ${pbsgName}" }
   input(
-    name: "${prefix}TestSequence",
+    name: "${pbsgName}_testSequence",
     title: "${h3(header)}",
     type: 'textarea',
     defaultValue: testSequenceJson,
     required: true,
     width: 9,
-    submitOnChange: true
+    submitOnChange: isDynamic()
   )
 }
 
-void removeTestSequence(String prefix = null) {
-  app.removeSetting("${prefix}TestSequence")
+void removeTestSequence(String pbsgName = null) {
+  app.removeSetting("${pbsgName}_testSequence")
 }
 
-ArrayList getTestSequence(String prefix = null) {
-  return fromJson(settings?."${prefix}TestSequence")
+ArrayList getTestSequence(String pbsgName) {
+  return fromJson(settings?."${pbsgName}_testSequence")
 }
 
 void solicitPbsgConfig(String pbsgName) {
@@ -192,7 +197,7 @@ void solicitPbsgConfig(String pbsgName) {
   //     default (dflt) button or 'not_applicable'
   //   - All exposed fields can be edited until data entry is "Done".
   paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
-  ArrayList buttonList = getButtonNames(pbsgName)
+  ArrayList buttonList = getButtonNames("${pbsgName}_")
   Integer buttonCount = buttonList?.size()
   // Provide feedback to the client (dynamically).
   ArrayList feedback = []
@@ -210,9 +215,9 @@ void solicitPbsgConfig(String pbsgName) {
       feedback << i('button names are delimited with spaces')
   }
   paragraph(h2(feedback.join('<br/>')))
-  solicitButtonNames(pbsgName, true)       // true → dynamic
+  solicitButtonNames("${pbsgName}_")
   if (buttonCount > 2) {
-    solicitDefaultButton(pbsgName, true)   // true → dynamic
+    solicitDefaultButton("${pbsgName}_")
   }
 }
 
@@ -295,6 +300,7 @@ void putPbsgState(Map pbsg) {
   // Ensure child VSWs are on|off consistent with the PBSG state
   pbsg_ReconcileVswsToState(pbsg)
   // Invoke the client's callback function to consume the latest changes.
+  // TBD: MIGRATE TO CALLBACK WITH MOVE TO DEVICE
   pbsg_ButtonOnCallback(pbsg)
 }
 
@@ -304,12 +310,14 @@ void putPbsgState(Map pbsg) {
 
 Map gatherPbsgConfigFromSettings(String pbsgName, String instType = 'pbsg') {
   // Collect data found in settings to produce a PBSG configuration Map.
+  String prefix = "${pbsgName}_"
+  logInfo('gatherPbsgConfigFromSettings', "pbsgName: ${pbsgName}")
   Map config = [:]
   if (pbsgName) {
-    ArrayList buttonsFromSettings = getButtonNames(pbsgName)
-    //--debug-> logInfo('gatherPbsgConfigFromSettings#A', "buttonsFromSettings: ${buttonsFromSettings}")
-    String dfltFromSettings = defaultButton(pbsgName)
-    //--debug-> logInfo('gatherPbsgConfigFromSettings#B', "dfltFromSettings: ${dfltFromSettings}")
+    ArrayList buttonsFromSettings = getButtonNames(prefix)
+    logInfo('gatherPbsgConfigFromSettings#A', "buttonsFromSettings: ${buttonsFromSettings}")
+    String dfltFromSettings = defaultButton(prefix)
+    logInfo('gatherPbsgConfigFromSettings#B', "dfltFromSettings: ${dfltFromSettings}")
     if (buttonsFromSettings) {
       // A minimal PBSG configuration Map exists
       config = [
@@ -318,14 +326,14 @@ Map gatherPbsgConfigFromSettings(String pbsgName, String instType = 'pbsg') {
         buttons: buttonsFromSettings,
         dflt: dfltFromSettings
       ]
-      //--debug-> logInfo('gatherPbsgConfigFromSettings#C', "config: ${config}")
+      logInfo('gatherPbsgConfigFromSettings#C', "config: ${config}")
       // Do warn that no default button was specified
       if (!dfltFromSettings) {
         logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
       }
     } else {
       // Insufficient data exists for a PBSG configuration Map
-      logError('gatherPbsgConfigFromSettings', 'getButtonNames(pbsg) produced null')
+      logError('gatherPbsgConfigFromSettings', 'getButtonNames(..) produced null')
     }
   }
   return config
@@ -343,17 +351,29 @@ Map pbsg_BuildToConfig(Map pbsgConfig) {
   if (pbsgConfig.name) {
     deleteChildDevice(pbsgConfig.name)
     pbsg = getOrCreatePBSG(pbsgConfig.name)
-    //pbsg.updateSetting('Buttons', [value:'one two three', type:'String'])
+    //pbsg.updateSetting('buttons', [value:'one two three', type:'String'])
     //pbsg.updateSetting()
     //pbsg.updateSetting()
     //pbsg.initialize()
     logInfo('pbsg_BuildToConfig#B', "pbsg: ${pbsg}")
     //--debug-> logInfo('pbsg_BuildToConfig#C', pbsg_State(pbsg))
+    //==========>
+    //==========> THIS NEXT PART NEEDS TO OCCUR WITHIN THE NEW DEVICE
+    //==========>
     // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
     // based on the current state of any discovered VSWs.
     pbsg.all.each { button ->
       if (button) {
         DevW vsw = getOrCreateVswWithToggle(pbsg.name, button)
+  // AT THIS POINT, THE PBSG DEVICE EXISTS AND ITS initialize() HAS BEEN CALLED
+  // ALBEIT WITH INSUFFICIENT DATA TO DO ANYTHING YET
+  //   - Previously, initial data was manually pushed into the new device
+  //     using the device drill down page. Then, "Save Preferences"
+  //     triggered update(). Update() acknowledge the config BUT was not
+  //     setup to build Child devies et al
+  //   - Settings needs to be pushed into the App.
+  //   - Then, settings need to be consumed to initiate operations
+  //     inclusive of issueing state updates.
         pbsg.lifo.push(button)
         if (switchState(vsw) == 'on') {
           // Move the button from the LIFO to active

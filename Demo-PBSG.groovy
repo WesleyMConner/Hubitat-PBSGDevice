@@ -46,7 +46,7 @@ void pbsg_ButtonOnCallback(Map pbsg) {
 
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
-  ArrayList buttons = getButtonNames(pbsgName)
+  ArrayList buttons = getButtonNames("${pbsgName}_")
   ArrayList testActions = new ArrayList()
   buttons.each{ b ->
     testActions << "${b}_ButtonOn"
@@ -63,22 +63,27 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   ArrayList testSeqList = getTestSequence(pbsgName) ?: []
   // Add the most recent 'next action' to the 'test sequence'.
   String nextAction = getNextAction(pbsgName)
-  //-> logInfo('buildTestSequence#A', ['',
-  //->   "pbsgName: ${pbsgName}",
-  //->   "nextAction: ${nextAction}",
-  //->   "testSeqList: ${testSeqList}"
-  //-> ].join('<br/>'))
+  //logInfo('buildTestSequence#A', ['',
+  //  "pbsgName: ${pbsgName}",
+  //  "nextAction: ${nextAction}",
+  //  "testSeqList: ${testSeqList}"
+  //].join('<br/>'))
   if (nextAction) {
-    testSeqList.add(nextAction)
-    //-> logInfo('buildTestSequence#B', ['',
-    //->   "pbsgName: ${pbsgName}",
-    //->   "testSeqList: ${testSeqList}"
-    //-> ].join('<br/>'))
+    testSeqList.add(nextAction)  // Add the latest item to the ArrayList
+    //logInfo('buildTestSequence#B', ['',
+    //  "pbsgName: ${pbsgName}",
+    //  "testSeqList: ${testSeqList}"
+    //].join('<br/>'))
+    removeNextAction(pbsgName)     // Force fresh data soliciation
+    removeTestSequence(pbsgName)   // Force fresh data soliciation
   }
-  removeNextAction(pbsgName)
-  removeTestSequence(pbsgName)
+  // Update the JSON version of the ArrayList
+  String testSequenceJson = toJson(testSeqList)
+  //??needed?? settings."${pbsgName}_testSequenceJson" = testSequenceJson
+  // Solicit a new Next Action
   solicitNextAction(pbsgName)
-  solicitTestSequence(toJson(testSeqList), pbsgName)
+  // Present the latest Test Squence Json (for settings preservation)
+  solicitTestSequence(testSequenceJson, pbsgName)
 }
 
 preferences {
@@ -97,9 +102,7 @@ Map demoPbsg() {
     section {
       solicitPbsgNames()
       ArrayList pbsgNames = getPbsgNames()
-      pbsgNames.each{ pbsgName ->
-        solicitPbsgConfig(pbsgName)
-      }
+      pbsgNames.each{ pbsgName -> solicitPbsgConfig(pbsgName) }
     }
   }
 }

@@ -83,7 +83,7 @@ metadata {
     //   - Are readable/writable on Hubitat's device drilldown page.
     //   - The settings function as configuration data for the driver.
     input(
-      name: 'Buttons',
+      name: 'buttons',
       title: "${b('Button Names')} (space delimited)",
       type: 'text',
       required: true
@@ -93,7 +93,7 @@ metadata {
       title: b('Default Button'),
       type: 'enum',
       multiple: false,
-      options: (settings?.Buttons?.tokenize(' ') ?: []) << 'not_applicable',
+      options: (settings?.buttons?.tokenize(' ') ?: []) << 'not_applicable',
       defaultValue: 'not_applicable',
       required: true
     )
@@ -135,6 +135,10 @@ void configure() {
 }
 */
 
+Integer countNumberOfButtons() {
+  return settings?.buttons?.tokenize(' ')?.size() ?: 0
+}
+
 void updated() {
   // Called when 'Save Preferences' is pushed on the Device drilldown page.
   // Review changes to 'settings':
@@ -144,10 +148,11 @@ void updated() {
   //   - device.removeSetting('<key>')
   setLogLevel(settings.logLevel)
   // Refresh numberOfButtons ...
-  settings.numberOfButtons = settings?.Buttons?.tokenize(' ')?.size() ?: 0
-  logInfo('updated', [b('SETTINGS:'),
+  settings.numberOfButtons = countNumberOfButtons()
+  logInfo('updated', [b('At exit SETTINGS:'),
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
+  initialize()
   //=> sendEvent(
   //=>   name: 'testX',
   //=>   value: 'Dill Pickles',
@@ -169,10 +174,16 @@ void initialize() {
   // Called on hub startup (if driver specifies capability "Initialize")
   // Otherwise: It is not required or automatically called if present.
   //-> setLogLevel(settings.logLevel)
-
-  logInfo('initialize', ['',
+  logInfo('initialize', [b('At entry SETTINGS:'),
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
+  //-> logInfo('initialize', ['',
+  //->   "name: ${name}",
+  //->   "device.name: ${device.name}",
+  //->   "device.getName(): ${device.getName()}"
+  //-> ].join('<br/>'))
+  Map config = gatherPbsgConfigFromSettings()
+  logInfo('initialize', "config: ${config}")
   /*
   Map pbsg = [
     active: 'C',
