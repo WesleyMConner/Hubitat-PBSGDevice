@@ -63,12 +63,6 @@ metadata {
                                  //   - push(number)
     capability 'Refresh'         // implied commands:
                                  //   - refresh()
-    command 'configure', ['json_object']
-    command 'configure', [[
-      name:'config*',
-      type:'JSON_OBJECT',
-      description:'toJson([String instType, ArrayList buttons, String dflt])'
-    ]]
     command 'activate', [[
       name: 'button',
       type: 'STRING',
@@ -81,7 +75,7 @@ metadata {
     ]]
     command 'activateLastActive', [[ /* no arguments */ ]]
 
-    // attribute "tbd"
+    //=> attribute 'textX', 'string'
   }
   preferences {
     // The following inputs drive application configuration:
@@ -95,31 +89,24 @@ metadata {
       required: true
     )
     input(
-      name: 'numberOfButtons',
-      title: 'Button count in buttonsString',
-      type: 'number',
-      defaultValue: getButtonNames()?.tokenize(' ')?.size(),
-      required: true
-    )
-    input(
       name: 'dflt',
-      title: 'Default Button',
+      title: b('Default Button'),
       type: 'enum',
       multiple: false,
-      options: [*getButtonNames(), 'not_applicable'],
+      options: (settings?.Buttons?.tokenize(' ') ?: []) << 'not_applicable',
       defaultValue: 'not_applicable',
       required: true
     )
     input(
       name: 'instType',
-      title: 'Type of PBSG',
+      title: b('Type of PBSG'),
       type: 'text',
       defaultValue: 'pbsg',
       required: true
     )
     input(
       name: 'logLevel',
-      title: 'Logging Threshold Level',
+      title: b('Logging Threshold ≥'),
       type: 'enum',
       multiple: false,
       options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
@@ -149,11 +136,25 @@ void configure() {
 */
 
 void updated() {
-  // Called when user selects Save Preferences
-  //-> setLogLevel(settings.logLevel)
-  logInfo('updated', ['',
+  // Called when 'Save Preferences' is pushed on the Device drilldown page.
+  // Review changes to 'settings':
+  //   - Ensure the overall consistency of settings
+  //   - Adjust 'state' as required.
+  // NOTES
+  //   - device.removeSetting('<key>')
+  setLogLevel(settings.logLevel)
+  // Refresh numberOfButtons ...
+  settings.numberOfButtons = settings?.Buttons?.tokenize(' ')?.size() ?: 0
+  logInfo('updated', [b('SETTINGS:'),
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
+  //=> sendEvent(
+  //=>   name: 'testX',
+  //=>   value: 'Dill Pickles',
+  //=>   descriptionText: 'testX -> DillPickles',
+  //=>   isStateChange: true
+  //=> )
+  //=> logInfo('updated', "testX (attribute): ${state.testX}, ${device.currentValue('testX')}")
 }
 
 void uninstalled() {
@@ -168,17 +169,19 @@ void initialize() {
   // Called on hub startup (if driver specifies capability "Initialize")
   // Otherwise: It is not required or automatically called if present.
   //-> setLogLevel(settings.logLevel)
+
   logInfo('initialize', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
-    Map pbsg = [
-      active: 'C',
-      pushed: 3,
-      lifo: ['E', 'A', 'B', 'D'],
-      buttons: ['A', 'B', 'C', 'D', 'E'],
-      numberOfButtons: 5,
-      display: 'Placeholder'
-    ]
+  /*
+  Map pbsg = [
+    active: 'C',
+    pushed: 3,
+    lifo: ['E', 'A', 'B', 'D'],
+    buttons: ['A', 'B', 'C', 'D', 'E'],
+    numberOfButtons: 5,
+    display: 'Placeholder'
+  ]
   //state.pbsg = pbsg
   sendEvent(
     name: 'pbsg',
@@ -187,19 +190,29 @@ void initialize() {
     descriptionText: 'active: C, button: 3',
     isStateChange: true
   )
+  sendEvent(
+    name: 'pushed',
+    value: 3,
+    descriptionText: 'active: C, button: 3',
+    isStateChange: true
+  )
+  */
 }
 
 void refresh() {
   // On-demand state refresh per capability "Refresh"
-      Map pbsg = [
-      active: 'C',
-      pushed: 3,
-      lifo: ['E', 'A', 'B', 'D'],
-      buttons: ['A', 'B', 'C', 'D', 'E'],
-      numberOfButtons: 5,
-      display: 'Placeholder'
-    ]
-  //state.pbsg = pbsg
+  logInfo('refresh', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+    ].join('<br/>'))
+  /*
+  Map pbsg = [
+    active: 'C',
+    pushed: 3,
+    lifo: ['E', 'A', 'B', 'D'],
+    buttons: ['A', 'B', 'C', 'D', 'E'],
+    numberOfButtons: 5,
+    display: 'Placeholder'
+  ]
   sendEvent(
     name: 'pbsg',
     value: pbsg,
@@ -207,7 +220,13 @@ void refresh() {
     descriptionText: 'active: C, button: 3',
     isStateChange: false
   )
-
+  sendEvent(
+    name: 'pushed',
+    value: 3,
+    descriptionText: 'active: C, button: 3',
+    isStateChange: true
+  )
+  */
 }
 
 // Process Methods on behalf of Child Devices

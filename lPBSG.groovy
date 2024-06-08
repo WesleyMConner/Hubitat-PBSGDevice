@@ -341,10 +341,13 @@ Map pbsg_BuildToConfig(Map pbsgConfig) {
   DevW pbsg
   //--debug-> logInfo('pbsg_BuildToConfig#A', "pbsgConfig: ${pbsgConfig}")
   if (pbsgConfig.name) {
+    deleteChildDevice(pbsgConfig.name)
     pbsg = getOrCreatePBSG(pbsgConfig.name)
+    //pbsg.updateSetting('Buttons', [value:'one two three', type:'String'])
+    //pbsg.updateSetting()
+    //pbsg.updateSetting()
+    //pbsg.initialize()
     logInfo('pbsg_BuildToConfig#B', "pbsg: ${pbsg}")
-
-    pbsg.initialize()
     //--debug-> logInfo('pbsg_BuildToConfig#C', pbsg_State(pbsg))
     // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
     // based on the current state of any discovered VSWs.
