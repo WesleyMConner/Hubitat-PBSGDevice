@@ -36,21 +36,6 @@ String switchState(DevW d) {
   return d.currentValue('switch', true) // true -> Do not use the cache
 }
 
-String toJson(def thing) {
-  def output = new JsonOutput()
-  return output.toJson(thing)
-}
-
-/* groovylint-disable-next-line MethodReturnTypeRequired */
-def fromJson(String json) {
-  def result
-  if (json) {
-    def slurper = new JsonSlurper()
-    result = slurper.parseText(json)
-  }
-  return result
-}
-
 String dropNonUnderscoreSpecialChars(String s) {
   return s?.replaceAll(/[\W_&&[^_ ]]/, '')
 }
@@ -230,15 +215,15 @@ DevW getOrCreatePBSG(String pbsgName) {
   String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
   // Device Network Identifiers DO NOT include white space.
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
-  logInfo(
-    'getOrCreatePBSG#A', ['',
-      "pbsgName: ${pbsgName}",
-      "dni: ${dni}",
-      "name: ${name}"
-  ].join('<br/>'))
+  //-> logInfo(
+  //->   'getOrCreatePBSG#A', ['',
+  //->     "pbsgName: ${pbsgName}",
+  //->     "dni: ${dni}",
+  //->     "name: ${name}"
+  //-> ].join('<br/>'))
   DevW d = getChildDevice(dni)
   if (d) {
-    logInfo('getOrCreatePBSG#B', "d: ${d}")
+    //-> logInfo('getOrCreatePBSG#B', "d: ${d}")
   } else {
     logWarn('getOrCreatePBSG', "Creating PBSG ${b(dni)}")
     d = addChildDevice(
@@ -308,58 +293,25 @@ void putPbsgState(Map pbsg) {
 // EXTRACT STATE FROM SETTINGS
 // ---------------------------
 
-Map gatherPbsgConfigFromSettings(String pbsgName, String instType = 'pbsg') {
+Map gatherPbsgConfigFromSettings(String pbsgName) {
   // Collect data found in settings to produce a PBSG configuration Map.
-  String prefix = "${pbsgName}_"
+  // For Apps collecting per-PBSG settings, supply a pbsgName.
+  // When calling this method from within a PBSG device, use pbsgName = null.
   logInfo('gatherPbsgConfigFromSettings', "pbsgName: ${pbsgName}")
-  Map config = [:]
-  if (pbsgName) {
-    ArrayList buttonsFromSettings = getButtonNames(prefix)
-    logInfo('gatherPbsgConfigFromSettings#A', "buttonsFromSettings: ${buttonsFromSettings}")
-    String dfltFromSettings = defaultButton(prefix)
-    logInfo('gatherPbsgConfigFromSettings#B', "dfltFromSettings: ${dfltFromSettings}")
-    if (buttonsFromSettings) {
-      // A minimal PBSG configuration Map exists
-      config = [
-        name: pbsgName,
-        instType: instType,
-        buttons: buttonsFromSettings,
-        dflt: dfltFromSettings
-      ]
-      logInfo('gatherPbsgConfigFromSettings#C', "config: ${config}")
-      // Do warn that no default button was specified
-      if (!dfltFromSettings) {
-        logWarn('pbsg_CollectSolicitedConfig', 'No default button was specified')
-      }
-    } else {
-      // Insufficient data exists for a PBSG configuration Map
-      logError('gatherPbsgConfigFromSettings', 'getButtonNames(..) produced null')
-    }
-  }
-  return config
+  String prefix = pbsgName ? "${pbsgName}_" : null
+  return [
+    name: pbsgName,
+    instType: settings.instType ?: 'pbsg',
+    buttons: getButtonNames(prefix),
+    dflt: defaultButton(prefix)
+  ]
 }
 
-Map pbsg_BuildToConfig(Map pbsgConfig) {
-  logInfo('pbsg_BuildToConfig#A', "pbsgConfig: ${pbsgConfig}")
-  // This method (re-)builds a PBSG and writes it to atomicState
-  // Parameter Assumptions:
-  //   The supplied Map (pbsg) IS NOT null and includes:
-  //     - pbsg.name which IS NOT null
-  //     - pbsg.all which IS NOT null and IS an ArrayList of button names
-  DevW pbsg
-  //--debug-> logInfo('pbsg_BuildToConfig#A', "pbsgConfig: ${pbsgConfig}")
+// getOrCreatePBSG(pbsgName)
+
+void pbsg_configure() {
+  Map pbsgConfig = gatherPbsgConfigFromSettings()
   if (pbsgConfig.name) {
-    deleteChildDevice(pbsgConfig.name)
-    pbsg = getOrCreatePBSG(pbsgConfig.name)
-    //pbsg.updateSetting('buttons', [value:'one two three', type:'String'])
-    //pbsg.updateSetting()
-    //pbsg.updateSetting()
-    //pbsg.initialize()
-    logInfo('pbsg_BuildToConfig#B', "pbsg: ${pbsg}")
-    //--debug-> logInfo('pbsg_BuildToConfig#C', pbsg_State(pbsg))
-    //==========>
-    //==========> THIS NEXT PART NEEDS TO OCCUR WITHIN THE NEW DEVICE
-    //==========>
     // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
     // based on the current state of any discovered VSWs.
     pbsg.all.each { button ->
@@ -377,22 +329,21 @@ Map pbsg_BuildToConfig(Map pbsgConfig) {
         pbsg.lifo.push(button)
         if (switchState(vsw) == 'on') {
           // Move the button from the LIFO to active
-          //--debug-> logInfo('pbsg_BuildToConfig#D', "Found VSW ${vsw.name} (${b('on')})")
+          //--debug-> logInfo('pbsg_configure#D', "Found VSW ${vsw.name} (${b('on')})")
           pbsg_ActivateButton(pbsg, button)
         } else {
-          //--debug-> logInfo('pbsg_BuildToConfig#E', "VSW ${vsw.name} (${i('off')})")
+          //--debug-> logInfo('pbsg_configure#E', "VSW ${vsw.name} (${i('off')})")
         }
-        //--debug-> logInfo('pbsg_BuildToConfig#F', pbsg_State(pbsg))
+        //--debug-> logInfo('pbsg_configure#F', pbsg_State(pbsg))
       } else {
-        logError('pbsg_BuildToConfig', "Encountered a null in pbsg.all (${pbsg.all})")
+        logError('pbsg_configure', "Encountered a null in pbsg.all (${pbsg.all})")
       }
     }
     if (!pbsg.active) { pbsg_EnforceDefault(pbsg) }
     putPbsgState(pbsg)  // Save to atomicState and issue client callback
   } else {
-    logError('pbsg_BuildToConfig', 'pbsgConfig.name is null')
+    logError('pbsg_configure', 'pbsgConfig.name is null')
   }
-  return pbsg
 }
 
 // ---------------------------

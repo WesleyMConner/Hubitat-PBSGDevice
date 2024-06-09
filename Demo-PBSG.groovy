@@ -192,10 +192,15 @@ void initialize() {
     //        buttons: ...,  // ArrayList of button names
     //           dflt: ...   // The default button name or null
     //     ]
+    DevW pbsg = getOrCreatePBSG(pbsgName)
     Map pbsgConfig = gatherPbsgConfigFromSettings(pbsgName)
     logInfo('initialize', "pbsgConfig: ${pbsgConfig}")
-    Map pbsg = pbsg_BuildToConfig(pbsgConfig)
-    logInfo('initialize', "pbsg: ${pbsg}")
+    // Push config to pbsg via parse(), which also invokes configure().
+    pbsg.parse(toJson([
+      instType: pbsgConfig.instType,
+      buttons: pbsgConfig.buttons,
+      dflt: pbsgConfig.dflt
+    ]))
     // BUILD AND RUN ANY TEST SEQUENCES
     ArrayList testSeqList = getTestSequence(pbsgName)
     Integer actionCnt = testSeqList.size()
@@ -209,6 +214,20 @@ void initialize() {
           String target = tokenizedAction[0]  // Could be a button or a VSW
           String action = tokenizedAction[1]
           //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
+  ////
+  //// Sunday Jun 9 - Need to invoke commands in Device
+  //// command 'activate', [[
+  ////   name: 'button',
+  ////   type: 'string',
+  ////   description: 'The button name to activate'
+  //// ]]
+  //// command 'deactivate', [[
+  ////   name: 'button',
+  ////   type: 'string',
+  ////   description: 'The button name to deactivate'
+  //// ]]
+  //// command 'activateLastActive', [[
+  ////
           switch (action) {
             case 'ButtonOn':
               pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)

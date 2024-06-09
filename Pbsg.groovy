@@ -27,55 +27,53 @@ import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 //        lifo - The list of 'off' buttons where the most recently
 //               turned off button is the "last in" - facilitating
 //               the "activateLastActive" command.
-//   State is managed The following summarizes a PBSG's state:
+//   PBSG state is published as a Map:
 //     [
-//                 active: STRING
-//                 pushed: INTEGER    (expected per PushableButton)
-//                   lifo: ARRAYLIST
-//                buttons: ARRAYLIST  (redundant for convenience)
-//        numberOfButtons: INTEGER    (expected per PushableButton)
-//                display: STRING     (redundant see below)
+//       == COMPREHENSIVE SUMMARY OF STATE
+//                 active: String     - The one 'on' button (if any)
+//                   lifo: ArrayList  - The 'off' buttons
+//                   dflt: String     - The 'dflt' button
+//       == REQUIRED
+//        numberOfButtons: Integer    - See `PushableButton`
+//                 pushed: Integer    - See `PushableButton`
+//       == PROVIDED FOR CONVENIENCE
+//                buttons: ArrayList  - All 'on' and 'off' buttons
+//                display: String     - Displayable summary of state
 //     ]
 //   IMPORTANT
-//     The ARRAYLIST implementation of "lifo" is inverted.
-//       - push() is expected to PREPEND an item which pop() will retrieve
-//       - instead push() APPENDS an item which pop() retrieves
-//     The 'display' STRING exists as a convenience. It provides a visual
-//     summary active & lifo (so is fully redundant with respect to state).
+//     The ArrayList implementation of "lifo" is inverted !!!
+//       - push() is expected to PREPEND an item which pop() retrieves
+//       - Instead push() APPENDS an item which pop() retrieves
+//     The 'display' String provides a visual summary active & lifo
 
 metadata {
   definition(
-    // Map keys per https://docs2.hubitat.com/en/developer/driver/overview
     name: 'PBSG',
     namespace: 'wesmc',
     author: 'Wesley M. Conner',
     importUrl: 'PENDING',
     singleThreaded: 'true'
   ) {
-    // Closute per https://docs2.hubitat.com/en/developer/driver/overview with:
-    // capabilities, commands, attributes, and/or fingerprints
-    capability 'Initialize'      // implied commands:
-                                 //   - initialize()
-    capability 'PushableButton'  // implied attributes:
+    capability 'Initialize'      // Commands: initialize()
+    capability 'Configuration'   // Commands: configure()
+    capability 'PushableButton'  // Attributes:
                                  //   - numberOfButtons: number
                                  //   - pushed: number
-                                 // implied commands:
-                                 //   - push(number)
-    capability 'Refresh'         // implied commands:
-                                 //   - refresh()
+                                 // Commands: push(number)
+    capability 'Refresh'         // Commands: refresh()
     command 'activate', [[
       name: 'button',
-      type: 'STRING',
+      type: 'string',
       description: 'The button name to activate'
     ]]
     command 'deactivate', [[
       name: 'button',
-      type: 'STRING',
+      type: 'string',
       description: 'The button name to deactivate'
     ]]
-    command 'activateLastActive', [[ /* no arguments */ ]]
-
-    //=> attribute 'textX', 'string'
+    command 'activateLastActive', [[
+    ]]
+    //=> attribute <name>, <type>
   }
   preferences {
     // The following inputs drive application configuration:
@@ -119,21 +117,17 @@ metadata {
 // Per https://docs2.hubitat.com/en/developer/driver/overview,
 // device data can be managed using state and/or atomicState
 
-void installed() {
-  // Called when device is first added
-  //-> setLogLevel(settings.logLevel)
-  logInfo('installed', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+String showSettings() {
+  return ['SETTINGS:',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join(', ')
+  ].join(', ')
 }
 
-/*
-void configure() {
-  // Runs due to presence of capability "Configuration"
-  //-> setLogLevel(settings.logLevel)
-  logInfo('configure', 'at entry')
+void installed() {
+  // Called when device is first added; but, before sufficient settings
+  // exist to configure() the device and start operations.
+  logInfo('installed', showSettings())
 }
-*/
 
 Integer countNumberOfButtons() {
   return settings?.buttons?.tokenize(' ')?.size() ?: 0
@@ -141,18 +135,66 @@ Integer countNumberOfButtons() {
 
 void updated() {
   // Called when 'Save Preferences' is pushed on the Device drilldown page.
+  // This is one mechanism for adjusting settings (i.e., as an alternative
+  // to parse(String text). Any time settings are adjusted, configure()
+  // needs to be (re-)run.
+  configure()
+}
+
+void parse(String jsonConfig) {
+  // Exposed externally
+  // Note:
+  //   - Generally speaking, Hubitat devices can leverage this method to
+  //     handle raw incoming data from Zigbee, Z-Wave and LAN devices,
+  //     creating events as needed. Virtual devices generally do not
+  //     demonstrate this behavior, as there is no data coming in from
+  //     a real device.
+  //   - This method is hijacked to facilitate injecting configuration
+  //     data (i.e., adjusting settings) as an alternative to manually
+  //     populating "Preferences" on the device's drilldown page.
+  //   - The expected jsonConfig is a Map with four optional keys:
+  //       toJson([
+  //         instType: <String>,     // Adjusts Parameter 'instType'
+  //          buttons: <ArrayList>,  // Adjusts Parameter 'buttons'
+  //             dflt: <String>,     // Adjusts Parameter 'dflt'
+  //         logLevel: <enum>        // Adjusts Parameter 'logLevel'
+  //       ])
+  logInfo('parse', "Processing JSON: '${jsonConfig}'")
+  Map parms = fromJson(jsonConfig)
+  if (parms.buttons) {
+    logInfo('parse', "parms.buttons: ${parms.buttons}")
+    settings.buttons = parms.buttons.join(' ')
+  }
+  if (parms.dflt) { settings.dflt = parms.dflt }
+  if (parms.instType) { settings.instType = parms.instType }
+  if (parms.logLevel) { settings.logLevel = parms.logLevel }
+  // (Re-populate buttons
+  logInfo('parse', "At exit, ${showSettings()}")
+  configure()
+}
+
+void parse(ArrayList actions) {
+  // This implementation is for component devices and their parents.
+  // It may be developed if PBSG is specialized (e.g., RoomsPbsg).
+  logWarn('parse', ['parse(ArrayList) ignored:',
+    actions.join('<br/>')
+  ].join('<br/>'))
+}
+
+void configure() {
   // Review changes to 'settings':
   //   - Ensure the overall consistency of settings
   //   - Adjust 'state' as required.
   // NOTES
   //   - device.removeSetting('<key>')
-  setLogLevel(settings.logLevel)
+  logInfo('configure', "At entry, ${showSettings()}")
+  if (settings.logLevel) {
+    logInfo('configure', "Adjusting logLevel to ${settings.logLevel}")
+    setLogLevel(settings.logLevel)
+  }
   // Refresh numberOfButtons ...
   settings.numberOfButtons = countNumberOfButtons()
-  logInfo('updated', [b('At exit SETTINGS:'),
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
-  initialize()
+  logInfo('configure', "At exit, ${showSettings()}")
   //=> sendEvent(
   //=>   name: 'testX',
   //=>   value: 'Dill Pickles',
@@ -160,6 +202,7 @@ void updated() {
   //=>   isStateChange: true
   //=> )
   //=> logInfo('updated', "testX (attribute): ${state.testX}, ${device.currentValue('testX')}")
+
 }
 
 void uninstalled() {
@@ -170,19 +213,14 @@ void uninstalled() {
   ].join('<br/>'))
 }
 
+
 void initialize() {
-  // Called on hub startup (if driver specifies capability "Initialize")
-  // Otherwise: It is not required or automatically called if present.
-  //-> setLogLevel(settings.logLevel)
-  logInfo('initialize', [b('At entry SETTINGS:'),
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
-  //-> logInfo('initialize', ['',
-  //->   "name: ${name}",
-  //->   "device.name: ${device.name}",
-  //->   "device.getName(): ${device.getName()}"
-  //-> ].join('<br/>'))
-  Map config = gatherPbsgConfigFromSettings()
+  // Called on hub startup (per capability "Initialize"). This method
+  // relies on configure() to process settings, create any missing child
+  // devices and initialize PBSG operations and state updates.
+  logInfo('initialize', showSettings())
+  //-> (app ?: device).getLabel()
+  Map config = gatherPbsgConfigFromSettings() // Note: No Args (device)
   logInfo('initialize', "config: ${config}")
   /*
   Map pbsg = [
@@ -212,9 +250,7 @@ void initialize() {
 
 void refresh() {
   // On-demand state refresh per capability "Refresh"
-  logInfo('refresh', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-    ].join('<br/>'))
+  logInfo('refresh', showSettings())
   /*
   Map pbsg = [
     active: 'C',
@@ -291,34 +327,6 @@ void push(Integer buttonNumber) {
 
 // Supported, State-Changing Actions
 
-void parse(String text) {
-  // Exposed externally
-  // Note:
-  //    parse(String desc) can handle raw incoming data from Zigbee,
-  //    Z-Wave, or LAN devices and generally creates events as needed;
-  //    see example drivers for more (virtual devices generally do not
-  //    demonstrate this behavior, as there is no data coming in from
-  //    a real device)
-
-  switch (text) {
-    case 'alpha':
-    case 'beta':
-    case 'gamma':
-      logInfo('parse', "Recognized >${text}<")
-      break
-    default:
-      logInfo('parse', "Rejected >${text}<")
-  }
-  return null
-}
-
-void parse(ArrayList actions) {
-  // This implementation is for component devices and their parents.
-  logWarn('parse', ['parse(ArrayList) ignored:',
-    actions.join('<br/>')
-  ].join('<br/>'))
-}
-
 // Methods in lPBSG.groovy
 //   - UTILITY
 //       - buttonStringToButtonList(String buttonsSettingsKey)
@@ -333,7 +341,7 @@ void parse(ArrayList actions) {
 //       - putPbsgState(Map pbsg)
 //   - EXTRACT STATE FROM SETTINGS
 //       - Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg')
-//       - Map pbsg_BuildToConfig(Map pbsg)
+//       - Map pbsg_configure(Map pbsg)
 //   - PBSG STATE CHANGING METHODS
 //       - boolean pbsg_ActivateButton(Map pbsg, String button)
 //       - boolean pbsg_DeactivateButton(Map pbsg, String button)
