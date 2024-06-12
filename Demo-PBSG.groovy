@@ -193,6 +193,8 @@ void initialize() {
     //           dflt: ...   // The default button name or null
     //     ]
     DevW pbsg = getOrCreatePBSG(pbsgName)
+    // Take the configuration data collected by this application AND
+    // push that configuration data into the PBSG instance.
     Map pbsgConfig = gatherPbsgConfigFromSettings(pbsgName)
     logInfo('initialize', "pbsgConfig: ${pbsgConfig}")
     // Push config to pbsg via parse(), which also invokes configure().
@@ -202,17 +204,20 @@ void initialize() {
       dflt: pbsgConfig.dflt
     ]))
     // BUILD AND RUN ANY TEST SEQUENCES
+    logInfo('initialize#NOTE_A', 'Entering build/run test sequences')
     ArrayList testSeqList = getTestSequence(pbsgName)
     Integer actionCnt = testSeqList.size()
     testSeqList?.eachWithIndex{ testAction, index ->
-      logInfo('initialize', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
+      logInfo('initialize#NOTE_B', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
       if (testAction == 'Activate_last_active') {
-        pbsg_ActivateLastActive(pbsg) && putPbsgState(pbsg)
+        //pbsg_ActivateLastActive(pbsg) && putPbsgState(pbsg)
+        pbsg.activateLastActive()
       } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]  // Could be a button or a VSW
           String action = tokenizedAction[1]
+          logInfo('initialize#NOTE_C', "target: ${target}, action ${action}")
           //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
   ////
   //// Sunday Jun 9 - Need to invoke commands in Device
@@ -230,13 +235,18 @@ void initialize() {
   ////
           switch (action) {
             case 'ButtonOn':
-              pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)
+              //pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)
+      logInfo('initialize#NOTE_D', 'ButtonOn')
+              pbsg.activate(target)
               break
             case 'ButtonOff':
-              pbsg_DeactivateButton(pbsg, target) && putPbsgState(pbsg)
+              //pbsg_DeactivateButton(pbsg, target) && putPbsgState(pbsg)
+      logInfo('initialize#NOTE_E', 'ButtonOff')
+              pbsg.deactivate(target)
               break
             case 'VswOn':
               // Simulate an external VSW on
+      logInfo('initialize#NOTE_F', 'VswOn')
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
               logInfo('initialize', "Turning ${vsw.name} on")
               vsw.on()
@@ -244,6 +254,7 @@ void initialize() {
               break
             case 'VswOff':
               // Simulate an external VSW off
+      logInfo('initialize#NOTE_G', 'VswOff')
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
               logInfo('initialize', "Turning VSW ${vsw.name} off")
               vsw.off()

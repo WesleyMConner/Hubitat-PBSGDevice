@@ -1,6 +1,50 @@
+= PushButton Switch Group (PGSG)
 
-= Hubitat-PbsgLibrary
-Hubitat-compatible code written for Hubitat's Groovy sandbox environment.
+== What is a PBSG?
+
+A PBSG is a Hubitat-compatible virtual device where ...
+
+### The client provides ...
+
+buttons `(required)`::
+A list of button names.
+
+defaultButton `(optional)`::
+A button (from the buttons list) that becomes active if no other PBSG button is active.
+
+### The virtual device ensures...
+
+* Only one button is active at any time.
+* The defaultButton (if specified) is activated when no other button is active.
+* One child VSW exists per button.
+* Child VSW state is updated when the PBSG state changes.
+* PBSG state is updated when child VSWs are turned on or off.
+
+### Advanced device features include ...
+
+* Integration with LUX sensors
+* Integration with Motion sensors
+* A companion demonstration application that illustrates device creation AND facilitates automatically-generated test scripts.
+* A custom dashboard cell (FUTURE)
+
+## Why use a PBSG?
+
+* A PBSG realizes a mutually-exclusive collection of buttons and corresponding switches.
+* Use cases include: Managing Hubitat modes, Managing per-room scenes, etc.
+* The PBSG can support Hubitat's `pushable` interface and concurrently facilitate Alexa integration (which is limited to turn on / turn off).
+
+== How are PBSGs defined?
+
+The structure of a PBSG can be defined:
+
+. Using the device drilldown page in the Hubitat GUI.
+. In code using available API calls.
+
+== What Components are Provided ?
+
+TBD
+
+== PARKED
 
 lPBSG.groovy::
 Hubitat functions that can be incorporated into downstream applications

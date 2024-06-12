@@ -27,20 +27,29 @@ import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 //        lifo - The list of 'off' buttons where the most recently
 //               turned off button is the "last in" - facilitating
 //               the "activateLastActive" command.
-//   PBSG state is published as a Map:
-//     [
-//       == COMPREHENSIVE SUMMARY OF STATE
-//                 active: String     - The one 'on' button (if any)
-//                   lifo: ArrayList  - The 'off' buttons
-//                   dflt: String     - The 'dflt' button
-//       == REQUIRED
-//        numberOfButtons: Integer    - See `PushableButton`
-//                 pushed: Integer    - See `PushableButton`
-//       == PROVIDED FOR CONVENIENCE
-//                buttons: ArrayList  - All 'on' and 'off' buttons
-//                display: String     - Displayable summary of state
-//     ]
-//   IMPORTANT
+//
+//   Subscribable Events
+//     PBSG state (issued for any state change):
+//       [
+//         == MINIMAL/COMPREHENSIVE SUMMARY OF STATE
+//                     active: String or null  - 'on' button
+//                       lifo: ArrayList       - 'off' buttons
+//                       dflt: String or null  - 'dflt' button
+//         == FOR `PushableButton` CAPABILITY
+//            numberOfButtons: Integer         - N
+//                     pushed: Integer         - Position 1..N
+//         == FOR CONVENIENCE
+//                    buttons: ArrayList       - 'all' buttons
+//           buttonToPosition: Map             - button name → 1..N
+//                    display: String          - Log-friendly state
+//       ]
+//     PushableButton (issued when cited fields change):
+//       [
+//            numberOfButtons: Integer         - N
+//                     pushed: Integer         - Position 1..N
+//       ]
+//
+//   VERY IMPORTANT
 //     The ArrayList implementation of "lifo" is inverted !!!
 //       - push() is expected to PREPEND an item which pop() retrieves
 //       - Instead push() APPENDS an item which pop() retrieves
@@ -76,18 +85,22 @@ metadata {
     //=> attribute <name>, <type>
   }
   preferences {
-    // The following inputs drive application configuration:
-    //   - Correspond to settings."${name}" (or `name` for short).
-    //   - Are readable/writable on Hubitat's device drilldown page.
-    //   - The settings function as configuration data for the driver.
+    // There are two facilities for updating these preferences:
+    //   (1) MANUALLY: Adjust via the Hubitat GUI device drilldown page
+    //       pressing "Save Preferences" to register changes.
+    //   (2) PROGRAMMATICALLY: Call the PBSG's parse(String json) method
+    //       to register changes.
+    // When changes are registered, the PBSG will (as required) adjust
+    // child VSWs, adjust PBSG and VSW state, call sendEvent() to update
+    // PBSG event subscribers.
     input(
-      name: 'buttons',
+      name: 'buttons',                 // settings.buttons
       title: "${b('Button Names')} (space delimited)",
       type: 'text',
       required: true
     )
     input(
-      name: 'dflt',
+      name: 'dflt',                    // settings.dflt
       title: b('Default Button'),
       type: 'enum',
       multiple: false,
@@ -96,14 +109,14 @@ metadata {
       required: true
     )
     input(
-      name: 'instType',
+      name: 'instType',                // settings.instType
       title: b('Type of PBSG'),
       type: 'text',
       defaultValue: 'pbsg',
       required: true
     )
     input(
-      name: 'logLevel',
+      name: 'logLevel',                // settings.logLevel
       title: b('Logging Threshold ≥'),
       type: 'enum',
       multiple: false,
@@ -126,7 +139,7 @@ String showSettings() {
 void installed() {
   // Called when device is first added; but, before sufficient settings
   // exist to configure() the device and start operations.
-  logInfo('installed', showSettings())
+  logInfo('installed', "Taking no action, ${showSettings()}")
 }
 
 Integer countNumberOfButtons() {
@@ -182,19 +195,23 @@ void parse(ArrayList actions) {
 }
 
 void configure() {
-  // Review changes to 'settings':
+  // Update changes to 'settings' (if any):
   //   - Ensure the overall consistency of settings
   //   - Adjust 'state' as required.
+  //   - Reconcile the PBSG instance to its child devices.
   // NOTES
   //   - device.removeSetting('<key>')
-  logInfo('configure', "At entry, ${showSettings()}")
+  logInfo('configure#A', "At entry, ${showSettings()}")
   if (settings.logLevel) {
-    logInfo('configure', "Adjusting logLevel to ${settings.logLevel}")
+    logInfo('configure#B', "Adjusting logLevel to ${settings.logLevel}")
     setLogLevel(settings.logLevel)
   }
   // Refresh numberOfButtons ...
   settings.numberOfButtons = countNumberOfButtons()
-  logInfo('configure', "At exit, ${showSettings()}")
+  logInfo('configure#C', "Before pbsg_configure(), ${showSettings()}")
+  pbsg_configure(device.name)
+  logInfo('configure#D', "After pbsg_configure(), ${showSettings()}")
+
   //=> sendEvent(
   //=>   name: 'testX',
   //=>   value: 'Dill Pickles',
@@ -208,9 +225,7 @@ void configure() {
 void uninstalled() {
   // Runs on device tear down
   //-> setLogLevel(settings.logLevel)
-  logInfo('uninstalled', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  logInfo('uninstalled', "Taking no action, ${showSettings()}")
 }
 
 
@@ -218,10 +233,11 @@ void initialize() {
   // Called on hub startup (per capability "Initialize"). This method
   // relies on configure() to process settings, create any missing child
   // devices and initialize PBSG operations and state updates.
-  logInfo('initialize', showSettings())
   //-> (app ?: device).getLabel()
-  Map config = gatherPbsgConfigFromSettings() // Note: No Args (device)
-  logInfo('initialize', "config: ${config}")
+  //Map config = gatherPbsgConfigFromSettings() // Note: No Args (device)
+  logInfo('initialize', "Before configure(), ${showSettings()}")
+  configure() // Calls gatherPbsgConfigFromSettings(), saves state, publishes
+  logInfo('initialize', "After configure(), ${showSettings()}")
   /*
   Map pbsg = [
     active: 'C',
@@ -250,7 +266,7 @@ void initialize() {
 
 void refresh() {
   // On-demand state refresh per capability "Refresh"
-  logInfo('refresh', showSettings())
+  logInfo('refresh', "Taking no action, ${showSettings()}")
   /*
   Map pbsg = [
     active: 'C',
@@ -274,6 +290,27 @@ void refresh() {
     isStateChange: true
   )
   */
+}
+
+void activate(String button) {
+  pbsg = getPbsgState(device.name)
+  pbsg_ActivateButton(pbsg, button)
+  logInfo('activate', "After adjustment, ${showSettings()}")
+  putPbsgState(pbsg)
+}
+
+void deactivate(String button) {
+  pbsg = getPbsgState(device.name)
+  pbsg_DeactivateButton(pbsg, button)
+  logInfo('deactivate', "After adjustment, ${showSettings()}")
+  putPbsgState(pbsg)
+}
+
+void activateLastActive() {
+  pbsg = getPbsgState(device.name)
+  pbsg_ActivateLastActive(pbsg)
+  logInfo('activateLastActive', "After adjustment, ${showSettings()}")
+  putPbsgState(pbsg)
 }
 
 // Process Methods on behalf of Child Devices

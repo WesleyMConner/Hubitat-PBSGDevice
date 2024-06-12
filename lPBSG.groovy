@@ -108,6 +108,7 @@ void solicitButtonNames(String prefix = null) {
 ArrayList getButtonNames(String prefix = null) {
   // Tokenize the space-delimited buttons to produce the ArrayList
   String buttonNamesString = settings?."${prefix}buttons"
+  logInfo('getButtonNames#A', "prefix: ${prefix}, buttonNamesString: ${buttonNamesString}")
   return buttonNamesString?.tokenize(' ')
 }
 
@@ -278,6 +279,11 @@ Map getPbsgState(String pbsgName) {
   return atomicState."${pbsgName}"
 }
 
+Integer getCurrentButton(Map pbsg) {
+  String active = pbsg?.active
+  return active ? pbsg.buttonToPosition(active) : null
+}
+
 void putPbsgState(Map pbsg) {
   logInfo('putPbsgState}', 'At entry')
   // Save the PBSG to atomicState
@@ -286,7 +292,22 @@ void putPbsgState(Map pbsg) {
   pbsg_ReconcileVswsToState(pbsg)
   // Invoke the client's callback function to consume the latest changes.
   // TBD: MIGRATE TO CALLBACK WITH MOVE TO DEVICE
-  pbsg_ButtonOnCallback(pbsg)
+  //-> pbsg_ButtonOnCallback(pbsg)
+  Integer currentButton = pbsg?.getCurrentButton()
+  String briefDescription = "active: ${pbsg.active}, button: ${currentButton}"
+    sendEvent(
+    name: 'pbsg',
+    value: pbsg,
+    unit: 'not_applicable',
+    descriptionText: briefDescription,
+    isStateChange: false
+  )
+  sendEvent(
+    name: 'pushed',
+    value: currentButton,
+    descriptionText: briefDescription,
+    isStateChange: true
+  )
 }
 
 // ---------------------------
@@ -297,26 +318,39 @@ Map gatherPbsgConfigFromSettings(String pbsgName) {
   // Collect data found in settings to produce a PBSG configuration Map.
   // For Apps collecting per-PBSG settings, supply a pbsgName.
   // When calling this method from within a PBSG device, use pbsgName = null.
-  logInfo('gatherPbsgConfigFromSettings', "pbsgName: ${pbsgName}")
   String prefix = pbsgName ? "${pbsgName}_" : null
+  logInfo('gatherPbsgConfigFromSettings#A', "pbsgName: ${pbsgName}, prefix: ${prefix}")
+  ArrayList buttons = getButtonNames(prefix)
+  logInfo('gatherPbsgConfigFromSettings#B', "pbsgName: ${pbsgName}, prefix: ${prefix}, buttons: ${buttons}")
+  Map buttonToPosition = buttons?.withIndex()?.collectEntries { button, i ->
+    [i+1, button]
+  }
+  logInfo('gatherPbsgConfigFromSettings#C', "buttonToPosition: ${buttonToPosition}")
   return [
     name: pbsgName,
     instType: settings.instType ?: 'pbsg',
     buttons: getButtonNames(prefix),
+    buttonToPosition: buttonToPosition,
     dflt: defaultButton(prefix)
   ]
 }
 
 // getOrCreatePBSG(pbsgName)
 
-void pbsg_configure() {
-  Map pbsgConfig = gatherPbsgConfigFromSettings()
-  if (pbsgConfig.name) {
+void pbsg_configure(String pbsgName) {
+  // The PBSG is built in two parts.
+  //   Part 1 - Collect configuration data.
+  //   Part 2 - Construct core components to the configuration specification
+  Map pbsg = gatherPbsgConfigFromSettings(pbsgName)
+  logInfo('pbsg_configure#A', "pbsg: ${pbsg}")
+  if (pbsg.name) {
     // Process pbsg.all buttons and populate pbsg.lifo and pbsg.active
     // based on the current state of any discovered VSWs.
     pbsg.all.each { button ->
+      logInfo('pbsg_configure#B', "button: ${button}")
       if (button) {
         DevW vsw = getOrCreateVswWithToggle(pbsg.name, button)
+        logInfo('pbsg_configure#C', "vsw: ${vsw}")
   // AT THIS POINT, THE PBSG DEVICE EXISTS AND ITS initialize() HAS BEEN CALLED
   // ALBEIT WITH INSUFFICIENT DATA TO DO ANYTHING YET
   //   - Previously, initial data was manually pushed into the new device
@@ -327,6 +361,7 @@ void pbsg_configure() {
   //   - Then, settings need to be consumed to initiate operations
   //     inclusive of issueing state updates.
         pbsg.lifo.push(button)
+        logInfo('pbsg_configure#D', "lifo: ${pbsg.lifo}")
         if (switchState(vsw) == 'on') {
           // Move the button from the LIFO to active
           //--debug-> logInfo('pbsg_configure#D', "Found VSW ${vsw.name} (${b('on')})")
