@@ -1,0 +1,76 @@
+= PBSG METHODS
+
+== Preferences / Settings
+.PBSG Preferences
+```
+  settings.buttons         // String
+  settings.dflt            // String
+  settings.instType        // String
+  settings.logLevel        // String
+```
+
+There are two facilities for updating PBSG preferences:
+
+MANUALLY::
+Fields can be edited via the Hubitat GUI's device drilldown page. Once fields are adjusted, clicking _Save Preferences_ triggers the device method `updated()` (to process the changes).
+
+PROGRAMMATICALLY::
+The PBSG method `parse(String json)` accepts a serialized Map with `<key: value>` pairs +
+Example: `pbsg.parse(toJson([<pref1: value>, <pref2: value>, ...]))` +
+ [See `Demo-PBSG.groovy` for examples.]
+
+== Attributes vs State
+Two facilities are available for managing dynamic PBSG data - **Attributes** and **State**.
+
+=== ATTRIBUTES
+Attributes (simple or complex) are both **communicated to clients** and **persisted** using Hubitat's `sendEvents()` infrastructure.
+
+```
+name: numberOfButtons      // Number, Capability 'PushableButton'
+name: pushed               // Number, Capability 'PushableButton'
+                           // state.buttonsToPositions."${pbsg.active}"
+name: buttonsToPositions   // Map of <key: value> pairs <buttonName: 1..N>
+name: pbsg                 // Map [ active: String, lifo: ArrayList ]
+```
+
+Some attributes have values that are derived from other current attribute values.
+
+```
+Integer pushed() {
+  Map b2p = device.currentValue('buttonsToPositions')
+  Map pbsg = device.currentValue('pbsg')
+  return b2p?."${pbsg.active}"
+}
+
+Integer numberOfButtons() {
+  return device.currentValue('buttonsToPositions')?.keySet()?.size() ?: 0
+}
+
+```
+
+=== STATE
+State (simple or complex) is persisted using `state.X`|`atomicState.X` *without issuing events*.
+
+```
+atomicState.ChildDevices   // ArrayList of Device Wrappers (aka DevW)
+```
+
+
+.Computed Fields issued with sendEvent()
+```
+  numberOfButtons()        // state.buttons.size()
+  pushed()                 // state.buttonToPosition."${state.active}"
+  display()                // pbsgState()
+```
+
+== Methods that Can Trigger Events
+
+Methods that *may* alter state operate on a Map initialized from state
+
+```
+  Map pbsg = [
+    active,                // String
+    lifo                   // ArrayList
+  ]
+```
+After one or more methods are called that operate on this Map, its fields are compared with counterpart fields in state. If the pbsg fields differ, the state counterparts are updated AND sendEvent(s) are issued.

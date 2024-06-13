@@ -19,6 +19,7 @@ import com.hubitat.hub.domain.Event as Event
 import groovy.json.JsonOutput    // See wesmc.lUtils
 import groovy.json.JsonSlurper   // See wesmc.lUtils
 
+
 metadata {
   definition(
     name: 'PBSG',
@@ -51,20 +52,21 @@ metadata {
     ]]
     // The folliwing attributes are comunicated/persisted exclusively using
     // sendEvent() - where the value is the attribute that is being altered.
-    attribute 'pbsg', 'map'
-    attribute 'active', 'string'
+    //=> attribute <name>, <type>
     // Available for future use.
     //   - updateDataValue()
     //   - See https://docs2.hubitat.com/en/developer/device-object
     //   - Currently NOT used
   }
   preferences {
-    input( name: 'buttons',
+    input(
+      name: 'buttons',                 // settings.buttons
       title: "${b('Button Names')} (space delimited)",
       type: 'text',
       required: true
     )
-    input( name: 'dflt',
+    input(
+      name: 'dflt',                    // settings.dflt
       title: b('Default Button'),
       type: 'enum',
       multiple: false,
@@ -72,13 +74,15 @@ metadata {
       defaultValue: 'not_applicable',
       required: true
     )
-    input( name: 'instType',
+    input(
+      name: 'instType',                // settings.instType
       title: b('Type of PBSG'),
       type: 'text',
       defaultValue: 'pbsg',
       required: true
     )
-    input( name: 'logLevel',
+    input(
+      name: 'logLevel',                // settings.logLevel
       title: b('Logging Threshold ≥'),
       type: 'enum',
       multiple: false,
@@ -90,149 +94,8 @@ metadata {
 }
 
 ////
-//// DEVICE LIFECYCLE METHODS
+//// SETTING METHODS
 ////
-
-void installed() {
-  // This method is called when a bare device is first constructed.
-  // Settings ARE NOT likely to meet sufficiency requirements.
-  logInfo('installed', 'Called, taking no action')
-}
-
-void uninstalled() {
-  // This method is called on device tear down.
-  logInfo('uninstalled', 'Called, taking no action')
-}
-
-void initialize() {
-  // This method is called on hub startup (per capability "Initialize").
-  ifSufficientSettingsConfigure('initialize()')
-}
-
-void refresh() {
-  // This method is called (per capability "Refresh") when a refresh is
-  // requested (manually or programmatically).
-  ifSufficientSettingsConfigure('refresh()')
-}
-
-////
-//// SETTINGS AND DERIVED STATE/ATTRIBUTES
-////
-
-void ifSufficientSettingsConfigure(String callingFn, Map candidate = null) {
-  // If a candidate map is provided:
-  //   - <candidate.X: value> us used in lieu of <settings.X: value>
-  //   - If per-field sufficiency requirements are met:
-  //     settings.X is updated to be candidate.X
-  // Any failed sufficiency tests are reported in the Hubitat Log
-  // Configuration is conditional on ALL sufficiency tests passing.
-  logInfo('ifSufficientSettingsConfigure#A', "candidate: ${candidate}")
-  ArrayList deficiency = []
-  String buttonsStr = candidate?.buttons ?: settings.buttons
-  ArrayList buttons = buttonsStr.tokenize(' ')
-  String markDirty = buttonsStr
-  logInfo('ifSufficientSettingsConfigure#A1', ['',
-    "buttonStr: ${buttonStr}",
-    "buttons: ${buttons}",
-    "markDirty: ${markDirty}"
-  ].join('<br/>'))
-  markDirty.replaceAll(/[\W_&&[^_ ]]/, '▮')
-  if (buttonsStr != markDirty) {
-    deficiency << "${b('buttons')} has invalid chars (${markDirty})."
-  //logInfo('ifSufficientSettingsConfigure#A2', "deficiency: ${deficiency}")
-  } else if (buttonsStr == null || buttons.size() == 0) {
-    deficiency << "No ${b('buttons')} were found."
-  //logInfo('ifSufficientSettingsConfigure#A3', "deficiency: ${deficiency}")
-  } else if (buttons.size() < 2) {
-    deficiency << "The button count (${buttons}) is < 2."
-  //logInfo('ifSufficientSettingsConfigure#A4', "deficiency: ${deficiency}")
-  } else {
-    // buttonsStr (from settings or candidate) meets requirements
-    //settings.buttons = buttonsStr
-    settings.buttons = buttons.join(' ')
-  logInfo('ifSufficientSettingsConfigure#A5', "settings.buttons: ${settings.buttons}")
-    // Also, retain the ArrayList in state
-    atomicState.buttons = buttons
-  logInfo('ifSufficientSettingsConfigure#A6', "atomicState.buttons: ${atomicState.buttons}")
-  }
-  logInfo('ifSufficientSettingsConfigure#B', "deficiency: ${deficiency}")
-  String dflt = candidate?.dflt ?: settings.dflt
-  if (dflt && !buttons?.contains(dflt)) {
-    deficiency << "The default button (${dflt}) is not in buttons (${buttons})."
-  } else {
-    // dflt (from settings or candidate) meets requirements
-    settings.dflt = dflt
-  }
-  logInfo('ifSufficientSettingsConfigure#C', "deficiency: ${deficiency}")
-  String instType = candidate?.instType ?: settings.instType
-  if (!instType) {
-    deficiency << "The ${b('instType')} is null."
-  } else {
-    // instType (from settings or candidate) meets requirements
-    settings.instType = instType
-  }
-  logInfo('ifSufficientSettingsConfigure#D', "deficiency: ${deficiency}")
-  String logLevel = candidate?.logLevel ?: settings.logLevel
-  ArrayList allowedLevels = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
-  if (!allowedLevels.contains(logLevel)) {
-    deficiency << "The logLevel (${logLevel}) is not found in ${allowedLevels}."
-  } else {
-    // logLevel (from settings or candidate) meets requirements
-    settings.logLevel = logLevel
-  }
-  if (deficiency.size() > 0) {
-    logError('ifSufficientSettingsConfigure', ["FAILED for ${callingFn}",
-      deficiency.join('<br/>')
-    ].join('<br/>'))
-  } else {
-    configure()
-  }
-}
-
-void update_SettingsDerivatives() {
-  // STEP 1 - Adjust state fields that only depend on settings.
-  atomicState.buttons = settings.buttons.tokenize(' ')
-  logInfo('update_SettingsDerivatives#A', "atomicState.buttons: ${atomicState.buttons}")
-
-  // STEP 2 - Update changed attributes that only depend on settings.
-  // ==> numberOfButtons
-  Integer last_numberOfButtons = device.currentValue('numberOfButtons')
-  Integer curr_numberOfButtons = atomicState.buttons.size()
-  logInfo('update_SettingsDerivatives#B', "numberOfButtons last: ${last_numberOfButtons}, curr:${curr_numberOfButtons}")
-  if (last_numberOfButtons != curr_numberOfButtons) {
-    sendEvent(
-      name: 'numberOfButtons',
-      isStateChange: true,
-      value: curr_numberOfButtons,
-      unit: '#',
-      descriptionText: "numberOfButtons ${last_numberOfButtons} → ${curr_numberOfButtons}"
-    )
-  }
-  // ==> buttonsToPostions
-  Map last_b2P = device.currentValue('buttonsToPostions')
-  Map curr_b2P = atomicState.buttons.withIndex().collectEntries { b, i ->
-    [b, i+1]
-  }
-  logInfo('update_SettingsDerivatives#C', "buttonsToPostions last: ${last_b2P}, curr:${curr_b2P}")
-  if (last_b2P != curr_b2P) {
-    sendEvent(
-      name: 'buttonsToPositions',
-      isStateChange: true,
-      value: curr_b2P,
-      unit: '#',
-      descriptionText: "buttonsToPositions: ${curr_b2P}"
-    )
-  }
-  logInfo('update_SettingsDerivatives#C', "pbsg Map: [a: 'apple', b: 'banana', c: 'cantelope']")
-  sendEvent(
-    name: 'pbsg',
-    isStateChange: true,
-    value: [a: 'apple', b: 'banana', c: 'cantelope'],
-    unit: null,
-    descriptionText: "Testing Map as a value"
-  )
-  logInfo('update_SettingsDerivatives#D', 'At exit')
-}
 
 void updated() {
   // PROCESS MANUAL SETTINGS CHANGE
@@ -241,7 +104,12 @@ void updated() {
   //     'Save Preferences'.
   //   - Any issues are reported via the Hubitat logs.
   //   - The configure() method is callsed iff sufficient settings exist.
-  ifSufficientSettingsConfigure('updated()')
+  logInfo('updated', 'Processing manually-updated preferences/settings')
+  Boolean healthySettings = settingsAreSufficient('updated()')
+  if (healthySettings) {
+    update_settingsDerivatives()
+    configure()
+  }
 }
 
 void parse(String jsonConfig) {
@@ -254,7 +122,7 @@ void parse(String jsonConfig) {
   // Expected JSON
   //   A serialized JSON Map with four (OPTIONAL) keys:
   //     toJson([
-  //        buttons: <String>,     // Adjusts settings.buttons
+  //        buttons: <ArrayList>,  // Adjusts settings.buttons
   //           dflt: <String>,     // Adjusts settings.dflt
   //       instType: <String>,     // Adjusts settings.instType
   //       logLevel: <enum>        // Adjusts settings.logLevel
@@ -264,29 +132,58 @@ void parse(String jsonConfig) {
   Map parms = fromJson(jsonConfig)
   // The following method replaces settings.X with parms.X (on a field
   // by field basis) when per-field sufficiency requirements are met.
-  ifSufficientSettingsConfigure('parse()', parms)
+  Boolean healthySettings = settingsAreSufficient('parse()', parms)
+  if (healthySettings) {
+    update_settingsDerivatives()
+    configure()
+  }
+}
+
+void update_SettingsDerivatives() {
+  // Adjust state (no reporting obligation)
+  atomicState.buttons = settings.buttons.tokenize(' ')
+  // Adjust attribute 'numberOfButtons' (Integer) iff changed.
+  Integer last_numberOfButtons = device.currentValue('numberOfButtons')
+  Integer curr_numberOfButtons = atomicState.buttons.size()
+  if (last_numberOfButtons != curr_numberOfButtons) {
+    sendEvent(
+      name: 'numberOfButtons',
+      isStateChange: true,
+      value: curr_numberOfButtons,
+      unit: '#',
+      descriptionText: "numberOfButtons ${last_numberOfButtons} → ${curr_numberOfButtons}"
+    )
+  }
+  // Adjust 'buttonsToPostions' (Map) attribute iff changed.
+  Map last_b2P = device.currentValue('buttonsToPostions')
+  Map curr_b2P = atomicState.buttons.withIndex().collecEntries { b, i ->
+    [b, i]
+  }
+  if (last_b2P != curr_b2P) {
+    sendEvent(
+      name: 'buttonsToPositions',
+      isStateChange: true,
+      value: curr_b2P,
+      unit: '#',
+      descriptionText: "buttonsToPositions: ${curr_b2P}"
+    )
+  }
 }
 
 String currentSettingsHtml() {
-  return [
-    b('SETTINGS:'),
-    settings.collect { k, v -> "${b(k)}: ${v}" }.join(', ')
+  return [b('SETTINGS:'),
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join(', ')
   ].join('<br/>')
 }
 
+
+
+
+
+
 ////
-//// PBSG METHODS AND RELATED STATE/ATTRIBUTES
+//// ATTRIBUTE METHODS
 ////
-
-
-
-
-
-
-
-
-
-
 
 
 Map getCurr_pushed() {
@@ -359,16 +256,125 @@ String currentStateHtml() {
   ].join('<br/>')
 }
 
+
+
+Boolean settingsAreSufficient(String context, Map candidate = null) {
+  // When a candidate map is provided:
+  //   - Any provided keys (candidate.X) is tested (in lieu of settings.X)
+  //   - The settings.X is update with candidate.X if when per-field
+  //     sufficiency requirements are met.
+  // This method returns true when all required settings are present and
+  // pass their sufficiency tests. Any deficiencies are reported in the
+  // Hubitat log. The method parse(String json) demonstrates a non-null
+  // candidate parameter.
+  ArrayList deficiency = []
+  String buttonsStr = candidate?.buttons ?: settings.buttons
+  ArrayList buttons = buttonsStr.tokenize(' ')
+  String markDirty = buttonsStr
+  markDirty.replaceAll(/[\W_&&[^_ ]]/, '▮')
+  if (buttonsStr != markDirty) {
+    deficiency << "${b('buttons')} has invalid chars (${markDirty})."
+  } else if (buttonsStr == null || buttons.size() == 0) {
+    deficiency << "No ${b('buttons')} were found."
+  } else if (buttons.size() < 2) {
+    deficiency << "The button count (${buttons}) is < 2."
+  } else {
+    // buttonsStr (from settings or candidate) meets requirements
+    settings.buttons = buttonsStr
+    // Also, retain the ArrayList in state.
+    state.buttons = buttons
+  }
+  String dflt = candidate?.dflt ?: settings.dflt
+  if (dflt && !buttons?.contains(dflt)) {
+    deficiency << "The default button (${dflt}) is not in buttons (${buttons})."
+  } else {
+    // dflt (from settings or candidate) meets requirements
+    settings.dflt = dflt
+  }
+  String instType = candidate?.instType ?: settings.instType
+  if (!instType) {
+    deficiency << "The ${b('instType')} is null."
+  } else {
+    // instType (from settings or candidate) meets requirements
+    settings.instType = instType
+  }
+  String logLevel = candidate?.logLevel ?: settings.logLevel
+  ArrayList allowedLevels = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
+  if (!allowedLevels.contains(logLevel)) {
+    deficiency << "The logLevel (${logLevel}) is not found in ${allowedLevels}."
+  } else {
+    // logLevel (from settings or candidate) meets requirements
+    settings.logLevel = logLevel
+  }
+  if (deficiency.size() > 0) {
+    logError('settingsAreSufficient', ["FAILED for ${context}",
+      deficiency.join('<br/>')
+    ].join('<br/>'))
+    return false
+  } else {
+    return true
+  }
+}
+
+void installed() {
+  // This method is called when a bare device is first constructed.
+  // Settings ARE NOT likely to meet sufficiency requirements.
+  logInfo('installed', 'At entry')
+  if (settingsAreSufficient('installed()')) { configure() }
+}
+
+void parse(ArrayList actions) {
+  // This method is reserved for interaction with FUTURE parent devices.
+  logWarn('parse', ['parse(ArrayList) ignored:',
+    actions.join('<br/>')
+  ].join('<br/>'))
+}
+
+void uninstalled() {
+  // This method is called on device tear down.
+  logInfo('uninstalled', "Taking no action, ${showSettings()}")
+}
+
+void initialize() {
+  // This method is called on hub startup (per capability "Initialize").
+  logInfo('initialize', 'At entry')
+  if (settingsAreSufficient('initialize()')) { configure() }
+}
+
+void refresh() {
+  logInfo('refresh', 'At entry')
+  // This method is called (per capability "Refresh") when a refresh is
+  // requested (manually or programmatically).
+  if (settingsAreSufficient('refresh()')) { configure() }
+}
+
+// C H A N G E   S T R A T E G Y
+//   PBSG CONFIG
+//     settings.buttons         // String
+//     settings.dflt            // String
+//     settings.instType        // String
+//     settings.logLevel        // String
+//   STATE DERIVED FROM CONFIG (Updates when CONFIG changes)
+//     state.buttonToPosition   // Map
+//   PBSG STATE
+//     state.active             // String
+//     state.lifo               // ArrayList
+//   ALWAYS COMPUTE
+//     numberOfButtons --> state.buttons.size()
+//     pushed --> : state.buttonToPosition."${state.active}"
+//     display --> displayState()
+
+
+
 Map getButtonsToPosition(ArrayList buttons) {
   buttons.withIndex().collectEntries { b, i -> [b, i] }
 }
 
 void configure() {
-  // This function in normally called by ifSufficientSettingsConfigure()
-  // It is possible to bypass the sufficiency tests and call configure
-  // directly due to the presence of capability 'Configuration'.
-  update_SettingsDerivatives()
-  logError('configure', 'YOU ARE HERE - NEED TO CONVERT TO NEW MODEL')
+  // Fully rebuild Pbsg state to the latest settings.
+  // PREREQUISITE:
+  //   settingsAreSufficient(..) == true
+  ArrayList buttons = settings.buttons.tokenize(' ')
   Map pbsg = [
     // Seed PBSG with configuration (and derived) data
     buttons: buttons,                                 // ArrayList
@@ -580,9 +586,76 @@ void turnOffVsw(String button) {
 // Methods Expected for Advertised Capabilities
 
 void push(Integer buttonNumber) {
-  String button = atomicState.bNumberToBName[buttonNumber]
+  String button = state.bNumberToBName[buttonNumber]
   logInfo('push', "Received ${button} (#${buttonNumber})")
   activateButton(button) && syncVswsAndIssueCallback()
+}
+
+// Supported, State-Changing Actions
+
+// Methods in lPBSG.groovy
+//   - UTILITY
+//       - buttonStringToButtonList(String buttonsSettingsKey)
+//       - switchState(DevW d)
+//   - APP UI SUPPORT
+//       - solicitPbsgConfig(String pbsgName)
+//   - FETCHERS
+//       - getOrCreatePBSG(String pbsgName)
+//       - getOrCreateVswWithToggle(String pbsgName, String button)
+//   - PBSG TO/FROM STATE
+//       - getPbsgState(String pbsgName)
+//       - putPbsgState(Map pbsg)
+//   - EXTRACT STATE FROM SETTINGS
+//       - Map gatherPbsgStateFromConfig(String pbsgName, String instType = 'pbsg')
+//       - Map pbsg_configure(Map pbsg)
+//   - PBSG STATE CHANGING METHODS
+//       - boolean pbsg_ActivateButton(Map pbsg, String button)
+//       - boolean pbsg_DeactivateButton(Map pbsg, String button)
+//       - boolean pbsg_ActivateLastActive(Map pbsg)
+//       - boolean pbsg_EnforceDefault(Map pbsg)
+//       - boolean pbsg_ReconcileVswsToState(Map pbsg)
+//   - PBSG STATE VISIBILITY METHODS
+//       - String pbsg_ButtonState(Map pbsg, String button)
+//       - String pbsg_State(Map pbsg)
+//   - NO LONGER REQUIRED
+//       - PbsgChildVswEventHandler(Event e)
+
+void sendPbsgEvent(String briefDescription) {
+  // Placeholder
+  sendEvent([
+    isStateChange: true,
+    displayName: device.getDisplayName(),
+    deviceId: device.getId(),
+    name: 'pbsg',
+    descriptionText: briefDescription,
+    value: [
+      active: state.active,    // String
+      lifo: state.lifo,      // ArrayList
+      info: [                // Map
+                   buttons: settings.buttons,
+                      dlft: settings.dflt,
+                  instType: settings.instType,
+                  logLevel: settings.logLevel,
+                   buttons: state.buttons,
+          buttonToPosition: state.buttonToPosition,
+           numberOfButtons: state.buttons.size(),
+                    pushed: state.buttonToPosition."${state.active}",
+                   display: pbsgState()
+      ]
+    ],
+  ])
+}
+
+void sendPushableEvent(String briefDescription) {
+  // Placeholder
+  sendEvent([
+    isStateChange: true
+    displayName: device.getDisplayName(),
+    deviceId: device.getId(),
+    name: 'pushed',
+    descriptionText: briefDescription,
+    value: state.buttonToPosition."${state.active}",
+  ])
 }
 
 ////
@@ -591,7 +664,7 @@ void push(Integer buttonNumber) {
 
 String pbsg_ButtonState(Map pbsg, String button) {
   // Assumed: pbsg != null
-  // The supplied PBSG is used without making any changes to its state
+  // The supplied PBSG is used without making any changes to its state.
   if (button != null) {
     String tag = (button == pbsg.dflt) ? '*' : ''
     String summary = "${tag}<b>${button}</b> "
@@ -613,7 +686,7 @@ String pbsg_ButtonState(Map pbsg, String button) {
 
 String pbsg_State(Map pbsg) {
   // Assumed: pbsg != null
-  // The supplied PBSG is used without making any changes to its state
+  // The supplied PBSG is used without making any changes to its state.
   //   IMPORTANT:
   //     LIFO push() and pop() are supported, *BUT* pushed items are
   //     appended (NOTE PREPENDED); so, the list needs to be reverse
@@ -630,13 +703,3 @@ String pbsg_State(Map pbsg) {
   }
   return result
 }
-
-//// UNUSED / UNSUPPORTED
-
-void parse(ArrayList actions) {
-  // This method is reserved for interaction with FUTURE parent devices.
-  logWarn('parse', ['parse(ArrayList) ignored:',
-    actions.join('<br/>')
-  ].join('<br/>'))
-}
-

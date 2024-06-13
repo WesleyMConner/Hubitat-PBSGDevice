@@ -33,16 +33,187 @@ definition (
   iconX2Url: ''
 )
 
-void pbsg_ButtonOnCallback(Map pbsg) {
-  // Clients specialize this method to handle PBSG updates. [The callback
-  // is used in lieu of sending App-to-App events.]
-  //   - Clients may have more than one PBSG instance (distinct Maps in
-  //     AtomicState).
-  //   - Clients can also extend PBSG (effectively, create a derived class)
-  //     and adjust 'instType' to differentiate their extension from the
-  //     'base class' (instType == 'pbsg'_.
-  logInfo('pbsg_ButtonOnCallback', pbsg_State(pbsg))
+//-> void pbsg_ButtonOnCallback(Map pbsg) {
+//->   // Clients specialize this method to handle PBSG updates. [The callback
+//->   // is used in lieu of sending App-to-App events.]
+//->   //   - Clients may have more than one PBSG instance (distinct Maps in
+//->   //     AtomicState).
+//->   //   - Clients can also extend PBSG (effectively, create a derived class)
+//->   //     and adjust 'instType' to differentiate their extension from the
+//->   //     'base class' (instType == 'pbsg'_.
+//->   logInfo('pbsg_ButtonOnCallback', pbsg_State(pbsg))
+//-> }
+
+////
+//// GENERAL-PURPOSE EVENT HANDLER
+////
+
+void pbsgHandler(Event e) {
+  // This very-generic handler logs events for:
+  //   - Multiple PBSG Instances
+  //   - Multiple PBSG Event Types
+  logInfo('pbsgHandler', eventDetails(e))
 }
+
+////
+//// SOLICIT DATA FOR ONE OR MORE PBSG INSTANCES
+////
+
+Boolean isDynamic() {
+  return (device?.getName()) ? false : true
+}
+
+void solicitPbsgNames() {
+  input(
+    name: 'pbsgNames',
+    title: [
+      h3('Enter one or more PBSG Names'),
+      '- Separate names with spaces',
+      "- Avoid special characters in names ('_' is allowed)",
+      '- The names will be used to create PBSG devices',
+      '- Use ⏎ to save your entry '
+    ].join('<br/>'),
+    type: 'text',
+    required: true,
+    submitOnChange: true
+  )
+}
+
+ArrayList getPbsgNames() {
+  String namesStr = settings.pbsgNames
+  // Drop non-word (\W) chars except for underscores and spaces.
+  namesStr?.replaceAll(/[\W_&&[^_ ]]/, '')
+  // Return one array entry for every non-null, space-delimited word.
+  return namesStr?.tokenize(' ')
+}
+
+void solicitButtonNames(String prefix) {
+  String header = "${b('Button Names')} (space delimited)"
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}buttons",
+    title: "${h3(header)}",
+    type: 'text',
+    required: true,
+    submitOnChange: dynamic
+  )
+}
+
+ArrayList getButtonNames(String prefix) {
+  // Tokenize the space-delimited buttons to produce the ArrayList
+  String buttonsString = settings?."${prefix}buttons"
+  // Drop non-word (\W) chars except for underscores and spaces.
+  buttonsString?.replaceAll(/[\W_&&[^_ ]]/, '')
+  // Return one array entry for every non-null, space-delimited word.
+  return buttonsString?.tokenize(' ')
+}
+
+void solicitDefaultButton(String prefix) {
+  String header = 'Default Button'
+  if (prefix) { header << "for ${prefix}" }
+  input(
+    name: "${prefix}dflt",
+    title: "${h3(header)}",
+    type: 'enum',
+    multiple: false,
+    options: [*getButtonNames(prefix), 'not_applicable'],
+    defaultValue: defaultButton(prefix) ?: 'not_applicable',
+    submitOnChange: isDynamic(),
+    required: true
+  )
+}
+
+String defaultButton(String prefix) {
+  return settings?."${prefix}dflt"
+}
+
+void solicitPbsgConfig(String pbsgName) {
+  // OVERVIEW
+  //   - This method is called from within an App page section{...}
+  //   - The client first populates the names of the PBSG buttons.
+  //   - Once the list of buttons exists, the user selects a
+  //     default (dflt) button or 'not_applicable'
+  //   - All exposed fields can be edited until data entry is "Done".
+  paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
+  ArrayList buttonList = getButtonNames("${pbsgName}_")
+  Integer buttonCount = buttonList?.size()
+  // Provide feedback to the client (dynamically).
+  ArrayList feedback = []
+  switch (buttonCount) {
+    case 1:
+      feedback << h1('Oops only one button was detected')
+      feedback << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+      // Deliberately fall through to the next case!
+    case null:
+      feedback << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
+      feedback << i("Enter button names ${b('delimited with spaces ')}")
+      break
+    default:
+      feedback << h2("Button names for PBSG ${b(pbsgName)}")
+      feedback << i('button names are delimited with spaces')
+  }
+  paragraph(h2(feedback.join('<br/>')))
+  solicitButtonNames("${pbsgName}_")
+  if (buttonCount > 2) {
+    solicitDefaultButton("${pbsgName}_")
+  }
+}
+
+////
+//// SOLICIT PBSG ACTIONS AND BUILD AD HOC PBSG TEST SEQUENCES
+////
+
+void solicitNextAction(String pbsgName) {
+  String header = 'Add a Test Action'
+  if (pbsgName) { header << "for ${pbsgName}" }
+  input(
+    name: "${pbsgName}_nextAction",
+    title: "${h3(header)}",
+    type: 'enum',
+    options: getTestActions(pbsgName),
+    required: false,
+    width: 3,
+    submitOnChange: isDynamic()
+  )
+}
+
+void removeNextAction(String pbsgName) {
+  // Clear this setting when it is important to solicit fresh data entry
+  // from a client without defaulting to the client's prior data entry.
+  app.removeSetting("${pbsgName}_nextAction")
+}
+
+String getNextAction(String pbsgName) {
+  return settings?."${pbsgName}_nextAction"
+}
+
+void solicitTestSequence(String testSequenceJson, String pbsgName) {
+  String header = 'Save the Test Sequence'
+  if (prefix) { header << "for ${pbsgName}" }
+  input(
+    name: "${pbsgName}_testSequence",
+    title: "${h3(header)}",
+    type: 'textarea',
+    defaultValue: testSequenceJson,
+    required: true,
+    width: 9,
+    submitOnChange: isDynamic()
+  )
+}
+
+void removeTestSequence(String pbsgName = null) {
+  // Clear this setting when it is important to solicit fresh data entry
+  // from a client without defaulting to the client's prior data entry.
+  app.removeSetting("${pbsgName}_testSequence")
+}
+
+ArrayList getTestSequence(String pbsgName) {
+  return fromJson(settings?."${pbsgName}_testSequence")
+}
+
+////
+//// SUPPORT FOR AD HOC PBSG TESTING
+////
 
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
@@ -86,45 +257,71 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   solicitTestSequence(testSequenceJson, pbsgName)
 }
 
-preferences {
-  page(name: 'demoPbsg', nextPage: 'testActionsPage')
-  page(name: 'testActionsPage', nextPage: 'testSequencePage')
-  page(name: 'testSequencePage')
+void configurePbsgUsingParse(DevW pbsg) {
+  // Per 'pbsg.groovy', there are two facilities for configuring a PBSG:
+  //   (1) MANUALLY: Using the Hubitat GUI's device drilldown page.
+  //   (2) PROGRAMMATICALLY: Using the PBSG's parse(String json) method.
+  // This method demonstrates programatic configuration. It collects settings
+  // solicited by 'page1_CreatePBSGs' into a Map. Then, passes a
+  // JSON representation of the Map to the PBSG's parse(..) method.
+  if (pbsg.name) {
+    String prefix = "${pbsg.name}_"
+    Map prefs = [
+      buttons: getButtonNames(prefix).join(' '),  // ArrayList->String
+      dflt: defaultButton(prefix),
+      instType: 'pbsg',
+      logLevel: 'INFO'
+    ]
+    pbsg.parse(toJson(prefs))
+  } else {
+    logError('configurePbsgUsingParse', 'Argument "pbsgName" was null')
+  }
 }
 
-Map demoPbsg() {
-  // Solicit 'settings' for each PBSG Name from the client.
+////
+//// DEFINE THREE DEMO DATA COLLECTION PAGES
+////
+
+preferences {
+  page(name: 'page1_CreatePBSGs', nextPage: 'page2_TestActions')
+  page(name: 'page2_TestActions', nextPage: 'page3_TestSequences')
+  page(name: 'page3_TestSequences')
+}
+
+Map page1_CreatePBSGs() {
   return dynamicPage(
-    name: 'demoPbsg',
-    title: h1("TestPBSG (${app.id})"),
+    name: 'page1_CreatePBSGs',
+    title: h1('Page 1 of 3 - Define PBSG Instance(s)'),
     uninstall: true
   ) {
     section {
       solicitPbsgNames()
       ArrayList pbsgNames = getPbsgNames()
+      logInfo('page1_CreatePGSGs', "pbsgNames: ${pbsgNames}")
       pbsgNames.each{ pbsgName -> solicitPbsgConfig(pbsgName) }
     }
   }
 }
 
-Map testActionsPage() {
+Map page2_TestActions() {
   return dynamicPage(
-    name: 'testActionsPage',
-    title: h1("TestPBSG (${app.id})"),
+    name: 'page2_TestActions',
+    title: h1('Page 2 of 3 - List per-PBSG available Test Actions'),
     uninstall: true
   ) {
     section {
       ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
       paragraph([
         'On the next page ...',
-        "  You will create a ${b('Test Sequence')} per PBSG",
+        "  You will create an ad hoc ${b('Test Sequence')} per PBSG",
         "    - A ${b('Test Sequence')} includes one or more ${b('Test Actions')}",
-        "    - ${b('Test Actions')} can be repeated in a ${b('Test Sequence')}"
+        "    - ${b('Test Actions')} can be repeated in a ${b('Test Sequence')}",
+        '    - Press "Next" to continue'
       ].join('<br/>'))
       pbsgNames.each{ pbsgName ->
         ArrayList testActions = getTestActions(pbsgName)
         paragraph([
-          h2("Test Options for the ${b(pbsgName)}"),
+          h2("${b('Test Actions')} for the ${b(pbsgName)}"),
           "  - ${testActions.join('<br/>  - ')}"
         ].join('<br/>'))
       }
@@ -132,18 +329,21 @@ Map testActionsPage() {
   }
 }
 
-Map testSequencePage() {
+Map page3_TestSequences() {
   return dynamicPage(
-    name: 'testSequencePage',
-    title: h1("TestPBSG (${app.id})"),
+    name: 'page3_TestSequences',
+    title: h1('Page 3 of 3 - Create per-PBSG Test Sequences'),
     install: true,
     uninstall: true
   ) {
     section {
       paragraph([
-        h2("How to build a ${b('Test Sequence')} "),
+        h2("To build a ${b('Test Sequence')}:"),
         "  - Select a ${b('Test Action')}",
-        "  - Use ⏎ to append the ${b('Test Action')} to the ${b('Test Sequence')}"
+        "  - Use ⏎ to append the ${b('Test Action')} to the ${b('Test Sequence')}",
+        "  - Repeat until the ${b('Test Sequence')} is complete",
+        '  - Press "Done" to build the PBSGs and run the Test Sequences',
+        '  - Watch Hubitat logs for Test Actions and PBSG results'
       ].join('<br/>'))
       // Develop Available Test Sequence Options
       ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
@@ -187,22 +387,13 @@ void initialize() {
     //   - Gather a PBSG configuration Map from data in settings.
     //   - Alternately, provide a PBSG configuration by brute force.
     //     Map config = [
-    //           name: ...,  // The name of the PBSG
-    //       instType: ...,  // 'pbsg' in most cases
     //        buttons: ...,  // ArrayList of button names
-    //           dflt: ...   // The default button name or null
+    //           dflt: ...,   // The default button name or null
+    //       instType: ...,  // 'pbsg' in most cases
     //     ]
     DevW pbsg = getOrCreatePBSG(pbsgName)
-    // Take the configuration data collected by this application AND
-    // push that configuration data into the PBSG instance.
-    Map pbsgConfig = gatherPbsgConfigFromSettings(pbsgName)
-    logInfo('initialize', "pbsgConfig: ${pbsgConfig}")
-    // Push config to pbsg via parse(), which also invokes configure().
-    pbsg.parse(toJson([
-      instType: pbsgConfig.instType,
-      buttons: pbsgConfig.buttons,
-      dflt: pbsgConfig.dflt
-    ]))
+    subscribe(pbsg, pbsgHandler, ['filterEvents': true])
+    configurePbsgUsingParse(pbsg)
     // BUILD AND RUN ANY TEST SEQUENCES
     logInfo('initialize#NOTE_A', 'Entering build/run test sequences')
     ArrayList testSeqList = getTestSequence(pbsgName)
