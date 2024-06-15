@@ -13,7 +13,6 @@
 // implied.
 // ---------------------------------------------------------------------------------
 #include wesmc.lUtils
-#include wesmc.lPBSG
 import groovy.json.JsonOutput    // Appears in wesmc.lPBSG
 import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
 
@@ -53,43 +52,49 @@ metadata {
 void installed() {
   // Runs when driver is installed
   //-> setLogLevel(settings.logLevel)
-  setLogLevel(settings.logLevel)
-  logInfo('installed', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  logInfo('installed', 'Entered')
+  settings?.logLevel && setLogLevel(settings.logLevel)
+  //-> logInfo('installed', ['',
+  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //-> ].join('<br/>'))
 }
 
 void configure() {
+  logInfo('configure', 'Entered')
   // Runs due to presence of capability "Configuration"
+  settings?.logLevel && setLogLevel(settings.logLevel)
   //-> setLogLevel(settings.logLevel)
-  logInfo('configure', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  //-> logInfo('configure', ['',
+  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //-> ].join('<br/>'))
 }
 
 
 void updated() {
+  logInfo('updated', 'Entered')
   // Runs when save is clicked in the preferences section
   //-> setLogLevel(settings.logLevel)
-  logInfo('updated', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  //-> logInfo('updated', ['',
+  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //-> ].join('<br/>'))
 }
 
 void uninstalled() {
+  logInfo('uninstalled', 'Entered')
   // Runs on device tear down
   //-> setLogLevel(settings.logLevel)
-  logInfo('uninstalled', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  //-> logInfo('uninstalled', ['',
+  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //-> ].join('<br/>'))
 }
 
 void initialize() {
+  logInfo('initialize', 'Entered')
   // Runs when called, typically by installed() and updated()
   //-> setLogLevel(settings.logLevel)
-  logInfo('initialize', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
+  //-> logInfo('initialize', ['',
+  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  //-> ].join('<br/>'))
 }
 
 // Methods Expected for Advertised Capabilities
@@ -120,8 +125,9 @@ void parse(ArrayList actions) {
   //                  unit: Omitted if boolean, '%', ...
   //       descriptionText: Human-friendly string
   //         isStateChange: true|false
+  logInfo('parse', "actions: ${actions}")
   actions.each{ action ->
-    if (action.name in ['switch']) {
+    if (action?.name in ['switch']) {
       logInfo('parse', action.descriptionText)
       sendEvent(action)
     } else {

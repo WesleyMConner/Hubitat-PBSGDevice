@@ -21,7 +21,6 @@ import groovy.json.JsonSlurper
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
 #include wesmc.lUtils
-#include wesmc.lPBSG
 
 definition (
   name: 'Demo-PBSG',
@@ -32,17 +31,6 @@ definition (
   iconUrl: '',
   iconX2Url: ''
 )
-
-//-> void pbsg_ButtonOnCallback(Map pbsg) {
-//->   // Clients specialize this method to handle PBSG updates. [The callback
-//->   // is used in lieu of sending App-to-App events.]
-//->   //   - Clients may have more than one PBSG instance (distinct Maps in
-//->   //     AtomicState).
-//->   //   - Clients can also extend PBSG (effectively, create a derived class)
-//->   //     and adjust 'instType' to differentiate their extension from the
-//->   //     'base class' (instType == 'pbsg'_.
-//->   logInfo('pbsg_ButtonOnCallback', pbsg_State(pbsg))
-//-> }
 
 ////
 //// GENERAL-PURPOSE EVENT HANDLER
@@ -267,12 +255,14 @@ void configurePbsgUsingParse(DevW pbsg) {
   if (pbsg.name) {
     String prefix = "${pbsg.name}_"
     Map prefs = [
-      buttons: getButtonNames(prefix).join(' '),  // ArrayList->String
+      buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
       dflt: defaultButton(prefix),
       instType: 'pbsg',
       logLevel: 'INFO'
     ]
+logInfo('A.1', 'configurePbsgUsingParse')
     pbsg.parse(toJson(prefs))
+logInfo('A.2', 'configurePbsgUsingParse')
   } else {
     logError('configurePbsgUsingParse', 'Argument "pbsgName" was null')
   }
@@ -297,7 +287,7 @@ Map page1_CreatePBSGs() {
     section {
       solicitPbsgNames()
       ArrayList pbsgNames = getPbsgNames()
-      logInfo('page1_CreatePGSGs', "pbsgNames: ${pbsgNames}")
+      //->logInfo('page1_CreatePGSGs', "pbsgNames: ${pbsgNames}")
       pbsgNames.each{ pbsgName -> solicitPbsgConfig(pbsgName) }
     }
   }
@@ -371,6 +361,28 @@ void updated() {
 void uninstalled() {
 }
 
+DevW getOrCreatePBSG(String pbsgName) {
+  String dni = pbsgName   // Should NOT contain special chars except for '_'
+  String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
+  // Device Network Identifiers DO NOT include white space.
+  // Device Names (exposed to Alexa ...) DO NOT include special characters.
+  DevW d = getChildDevice(dni)
+  if (!d) {
+    logWarn('getOrCreatePBSG', "Creating PBSG ${b(dni)}")
+    d = addChildDevice(
+      'wesmc',   // namespace
+      'PBSG',    // typeName
+      dni,       // Device Network Identifier (<pbsgName>_<button>)
+      [
+        isComponent: true,   // Lifecycle is tied to parent
+        name: name,          // "PBSG <pbsgName>"
+        label: name          // "PBSG <pbsgName>"
+      ]
+    )
+  }
+  return d
+}
+
 void initialize() {
   setLogLevel('INFO')
   // For each pbsgName:
@@ -381,6 +393,7 @@ void initialize() {
   //   - Top-level Maps in state are efficiently processed with the
   //     atomicState() and atomicState.updateMapValue(...).
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
+  logInfo('initialize', "settings->${settings.pbsgNames}, pbsgNames: ${pbsgNames}")
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
     // CREATE THE PBSG INSTANCE
@@ -393,7 +406,9 @@ void initialize() {
     //     ]
     DevW pbsg = getOrCreatePBSG(pbsgName)
     subscribe(pbsg, pbsgHandler, ['filterEvents': true])
+    logInfo('A', 'Initialize')
     configurePbsgUsingParse(pbsg)
+    logInfo('B', 'Initialize')
     // BUILD AND RUN ANY TEST SEQUENCES
     logInfo('initialize#NOTE_A', 'Entering build/run test sequences')
     ArrayList testSeqList = getTestSequence(pbsgName)
@@ -410,20 +425,6 @@ void initialize() {
           String action = tokenizedAction[1]
           logInfo('initialize#NOTE_C', "target: ${target}, action ${action}")
           //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
-  ////
-  //// Sunday Jun 9 - Need to invoke commands in Device
-  //// command 'activate', [[
-  ////   name: 'button',
-  ////   type: 'string',
-  ////   description: 'The button name to activate'
-  //// ]]
-  //// command 'deactivate', [[
-  ////   name: 'button',
-  ////   type: 'string',
-  ////   description: 'The button name to deactivate'
-  //// ]]
-  //// command 'activateLastActive', [[
-  ////
           switch (action) {
             case 'ButtonOn':
               //pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)

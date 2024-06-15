@@ -13,7 +13,6 @@
 // implied.
 // ---------------------------------------------------------------------------------
 #include wesmc.lUtils
-#include wesmc.lPBSG
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.hub.domain.Event as Event
 import groovy.json.JsonOutput    // See wesmc.lUtils
@@ -51,8 +50,8 @@ metadata {
     ]]
     // The folliwing attributes are comunicated/persisted exclusively using
     // sendEvent() - where the value is the attribute that is being altered.
+    attribute 'buttonsToPositions', 'map'
     attribute 'pbsg', 'map'
-    attribute 'active', 'string'
     // Available for future use.
     //   - updateDataValue()
     //   - See https://docs2.hubitat.com/en/developer/device-object
@@ -119,119 +118,166 @@ void refresh() {
 //// SETTINGS AND DERIVED STATE/ATTRIBUTES
 ////
 
-void ifSufficientSettingsConfigure(String callingFn, Map candidate = null) {
-  // If a candidate map is provided:
-  //   - <candidate.X: value> us used in lieu of <settings.X: value>
-  //   - If per-field sufficiency requirements are met:
-  //     settings.X is updated to be candidate.X
-  // Any failed sufficiency tests are reported in the Hubitat Log
-  // Configuration is conditional on ALL sufficiency tests passing.
-  logInfo('ifSufficientSettingsConfigure#A', "candidate: ${candidate}")
-  ArrayList deficiency = []
-  String buttonsStr = candidate?.buttons ?: settings.buttons
-  ArrayList buttons = buttonsStr.tokenize(' ')
-  String markDirty = buttonsStr
-  logInfo('ifSufficientSettingsConfigure#A1', ['',
-    "buttonStr: ${buttonStr}",
-    "buttons: ${buttons}",
-    "markDirty: ${markDirty}"
-  ].join('<br/>'))
-  markDirty.replaceAll(/[\W_&&[^_ ]]/, '▮')
-  if (buttonsStr != markDirty) {
-    deficiency << "${b('buttons')} has invalid chars (${markDirty})."
-  //logInfo('ifSufficientSettingsConfigure#A2', "deficiency: ${deficiency}")
-  } else if (buttonsStr == null || buttons.size() == 0) {
-    deficiency << "No ${b('buttons')} were found."
-  //logInfo('ifSufficientSettingsConfigure#A3', "deficiency: ${deficiency}")
-  } else if (buttons.size() < 2) {
-    deficiency << "The button count (${buttons}) is < 2."
-  //logInfo('ifSufficientSettingsConfigure#A4', "deficiency: ${deficiency}")
+// Per https://community.hubitat.com/t/device-updatesetting-not-updating-device-preferences/25201
+// device.updateSetting("debugOutput",[value:"false",type:"bool"])
+// void updateSetting(String name, Map options)
+// void updateSetting(String name, Long value)
+// void updateSetting(String name, Boolean value)
+// void updateSetting(String name, String value)
+// void updateSetting(String name, Double value)
+// void updateSetting(String name, Date value)
+// void updateSetting(String name, List value)
+// device.updateSetting("paramOperationMode",[value:"2", type:"enum"])
+//
+// https://community.hubitat.com/t/app-updatesetting-how-to-update-a-setting-of-type-enum-or-color-stumped/103285
+
+Boolean healthyButtonsPref(String buttons) {
+  Boolean result = false
+  ArrayList buttonsList = buttons.tokenize(' ')
+  String markDirty = buttons
+  markDirty?.replaceAll(/[\W_&&[^_ ]]/, '▮')
+  if (buttons != markDirty) {
+    logError('healthyButtonsPref', ["Invalid ${b('buttonsList')} preference:",
+      buttons,
+      "${markDirty} ('▮' denotes problematic character)."
+    ].join('<br/>'))
+  } else if (buttons == null || buttonsList.size() == 0) {
+    logError('healthyButtonsPref', "No ${b('buttonsList')} were found.")
+  } else if (buttonsList.size() < 2) {
+    deficiency << "The button count, ${buttonsList} (${buttonsList.size()}) is < 2."
   } else {
-    // buttonsStr (from settings or candidate) meets requirements
-    //settings.buttons = buttonsStr
-    settings.buttons = buttons.join(' ')
-  logInfo('ifSufficientSettingsConfigure#A5', "settings.buttons: ${settings.buttons}")
-    // Also, retain the ArrayList in state
-    atomicState.buttons = buttons
-  logInfo('ifSufficientSettingsConfigure#A6', "atomicState.buttons: ${atomicState.buttons}")
+    // Note: ArrayList -> String
+    buttons = buttonsList.join(' ')  // ArrayList → String
+    device.updateSetting('buttons', [value: buttons, type: 'string'])
+    atomicState.buttonsList = buttonsList
+    logTrace('healthyButtonsPref', "settings.buttons: ${buttons}")
+    result = true
   }
-  logInfo('ifSufficientSettingsConfigure#B', "deficiency: ${deficiency}")
-  String dflt = candidate?.dflt ?: settings.dflt
-  if (dflt && !buttons?.contains(dflt)) {
-    deficiency << "The default button (${dflt}) is not in buttons (${buttons})."
+  return result
+}
+
+Boolean healthyDfltPref(String dflt) {
+  result = false
+  if (dflt) {
+    ArrayList buttons = atomicState.buttonsList
+    if (buttons) {
+      if (buttons.contains(dflt)) {
+        device.updateSetting('dflt', [value: dflt, type: 'string'])
+        //-> logTrace('healthyDfltPref', "settings.dflt: ${settings.dflt}")
+        result = true
+      } else {
+        logError('healthyDfltPref', "dflt (${dflt}) not among buttons (${buttons})")
+      }
+    } else {
+      logError('healthyDfltPref', 'Cannot find atomicState.buttonsList')
+    }
   } else {
-    // dflt (from settings or candidate) meets requirements
-    settings.dflt = dflt
+    logError('healthyDfltPref', "dflt found null instead of 'not_applicable'")
   }
-  logInfo('ifSufficientSettingsConfigure#C', "deficiency: ${deficiency}")
-  String instType = candidate?.instType ?: settings.instType
-  if (!instType) {
-    deficiency << "The ${b('instType')} is null."
-  } else {
-    // instType (from settings or candidate) meets requirements
-    settings.instType = instType
-  }
-  logInfo('ifSufficientSettingsConfigure#D', "deficiency: ${deficiency}")
-  String logLevel = candidate?.logLevel ?: settings.logLevel
-  ArrayList allowedLevels = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
-  if (!allowedLevels.contains(logLevel)) {
-    deficiency << "The logLevel (${logLevel}) is not found in ${allowedLevels}."
-  } else {
-    // logLevel (from settings or candidate) meets requirements
-    settings.logLevel = logLevel
-  }
-  if (deficiency.size() > 0) {
-    logError('ifSufficientSettingsConfigure', ["FAILED for ${callingFn}",
-      deficiency.join('<br/>')
+  return result
+}
+
+Boolean healthyInstTypePref(String instType) {
+  result = false
+  String markDirty = instType
+  markDirty?.replaceAll(/[\W_&&[^_]]/, '▮')
+  if (instType != markDirty) {
+      logError('healthyInstTypePref', ["Invalid ${b('instType')} preference:",
+      instType,
+      "${markDirty} ('▮' denotes problematic character)."
     ].join('<br/>'))
   } else {
-    configure()
+    device.updateSetting('instType', [value: instType, type: 'string'])
+    //-> logTrace('healthyInstTypePref', "settings.instType: ${settings.instType}")
+    result = true
   }
+  return result
+}
+
+Boolean healthyLogLevelPref(String logLevel) {
+  result = false
+  ArrayList ok = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
+  if (!ok.contains(logLevel)) {
+    logError('healthyLogLevelPref', "logLevel (${logLevel}) not in (${ok}).")
+  } else {
+    device.updateSetting('logLevel', [value: logLevel, type: 'enum'])
+    //-> logTrace('healthyLogLevelPref', "settings.logLevel: ${logLevel}")
+    result = true
+  }
+  return result
+}
+
+Boolean healthyPrefs(String callingFn) {
+  Boolean result = false
+  if (
+    healthyButtonsPref(settings.buttons)
+    && healthyDfltPref(settings.dflt)
+    && healthyInstTypePref(settings.instType)
+    && healthyLogLevelPref(settings.logLevel)
+  ) {
+    result = true
+    logTrace('healthyPrefs', "Called by ${callingFn}, all OK")
+  } else {
+    logError('healthyPrefs', "Called by ${callingFn}, review logs")
+  }
+  return result
+}
+
+Integer buttonNameToPushed(String s) {
+  atomicState.buttonsList?.withIndex().collectEntries { b, i -> [(b), i+1] }."${s}"
 }
 
 void update_SettingsDerivatives() {
-  // STEP 1 - Adjust state fields that only depend on settings.
-  atomicState.buttons = settings.buttons.tokenize(' ')
-  logInfo('update_SettingsDerivatives#A', "atomicState.buttons: ${atomicState.buttons}")
-
-  // STEP 2 - Update changed attributes that only depend on settings.
-  // ==> numberOfButtons
-  Integer last_numberOfButtons = device.currentValue('numberOfButtons')
-  Integer curr_numberOfButtons = atomicState.buttons.size()
-  logInfo('update_SettingsDerivatives#B', "numberOfButtons last: ${last_numberOfButtons}, curr:${curr_numberOfButtons}")
-  if (last_numberOfButtons != curr_numberOfButtons) {
+  logInfo('A.1.2.1.A', 'update_SettingsDerivatives')
+  // ==> Update atomicState.buttonsList
+  atomicState.buttonsList = settings.buttons?.tokenize(' ')
+  logInfo('A.1.2.1.B', "update_SettingsDerivatives, aS.bL: ${atomicState.buttonsList}")
+  // Update attributes that only depend on settings.
+  // ==> Update numberOfButtons (attribute)
+  Integer curr_numberOfButtons = device.currentValue('numberOfButtons')
+  logInfo('A.1.2.1.C', "update_SettingsDerivatives, curr_nOB: ${curr_numberOfButtons}")
+  ArrayList buttonsList = atomicState.buttonsList
+  logInfo('A.1.2.1.D', "update_SettingsDerivatives, buttonsList: ${buttonsList}")
+  Integer next_numberOfButtons = buttonsList?.size()
+  logInfo('A.1.2.1.E', "update_SettingsDerivatives, number of buttons: ${curr_numberOfButtons} -> ${next_numberOfButtons}")
+  if (curr_numberOfButtons != next_numberOfButtons) {
+    logInfo('A.1.2.1.E.1', "update_SettingsDerivatives, Before sendEvent numberOfButtons")
     sendEvent(
       name: 'numberOfButtons',
       isStateChange: true,
-      value: curr_numberOfButtons,
+      value: next_numberOfButtons,
       unit: '#',
-      descriptionText: "numberOfButtons ${last_numberOfButtons} → ${curr_numberOfButtons}"
+      descriptionText: "numberOfButtons ${curr_numberOfButtons} → ${next_numberOfButtons}"
     )
+    logInfo('A.1.2.1.E.2', "update_SettingsDerivatives, After sendEvent numberOfButtons")
   }
-  // ==> buttonsToPostions
-  Map last_b2P = device.currentValue('buttonsToPostions')
-  Map curr_b2P = atomicState.buttons.withIndex().collectEntries { b, i ->
-    [b, i+1]
-  }
-  logInfo('update_SettingsDerivatives#C', "buttonsToPostions last: ${last_b2P}, curr:${curr_b2P}")
-  if (last_b2P != curr_b2P) {
+  // ==> Update buttonsToPositions (attribute)
+  logInfo('A.1.2.1.F', "update_SettingsDerivatives, curr_b2P: Before buttonsToPositions Update")
+  //Map curr_b2P = device.currentValue('buttonsToPositions')
+
+  String yyy = 'wed'
+  logInfo('#254', "${buttonsList?.withIndex().collectEntries { b, i -> [(b), i+1] }."${yyy}"}")
+  logInfo('#255', "${buttonNameToPushed(yyy)}")
+  Map curr_b2P = device.currentValue('buttonsToPositions')
+  logInfo('A.1.2.1.G', "update_SettingsDerivatives, curr_b2P: ${curr_b2P}")
+  logInfo('A.1.2.1.H', "update_SettingsDerivatives, b2P: ${curr_b2P} -> ${next_b2P}")
+  if (curr_b2P != next_b2P) {
+    logInfo('A.1.2.1.H.1', ['update_SettingsDerivatives',
+      'Before sendEvent buttonsToPositions',
+      "next_b2P: ${next_b2P}"
+    ].join('<br/>'))
     sendEvent(
       name: 'buttonsToPositions',
       isStateChange: true,
-      value: curr_b2P,
+      value: next_b2P,
       unit: '#',
-      descriptionText: "buttonsToPositions: ${curr_b2P}"
+      descriptionText: "buttonsToPositions: ${next_b2P}"
     )
+    logInfo('A.1.2.1.H.2', ['update_SettingsDerivatives',
+      "After sendEvent buttonsToPositions",
+      "checking last: ${device.currentValue('buttonsToPositions')}"
+    ].join('<br/>'))
   }
-  logInfo('update_SettingsDerivatives#C', "pbsg Map: [a: 'apple', b: 'banana', c: 'cantelope']")
-  sendEvent(
-    name: 'pbsg',
-    isStateChange: true,
-    value: [a: 'apple', b: 'banana', c: 'cantelope'],
-    unit: null,
-    descriptionText: "Testing Map as a value"
-  )
-  logInfo('update_SettingsDerivatives#D', 'At exit')
 }
 
 void updated() {
@@ -259,12 +305,19 @@ void parse(String jsonConfig) {
   //       instType: <String>,     // Adjusts settings.instType
   //       logLevel: <enum>        // Adjusts settings.logLevel
   //     ])
-  logInfo('parse', ["Processing provided JSON:", '=====', jsonConfig,
-    '====='].join('<br/>'))
+  logInfo('parse', "JSON:<br/>${jsonConfig}")
   Map parms = fromJson(jsonConfig)
-  // The following method replaces settings.X with parms.X (on a field
-  // by field basis) when per-field sufficiency requirements are met.
-  ifSufficientSettingsConfigure('parse()', parms)
+logInfo('A.1.1', "parse: ${parms}")
+  if (
+    healthyButtonsPref(parms.buttons ?: settings.buttons)
+    && healthyDfltPref(parms.dflt ?: settings.dflt)
+    && healthyInstTypePref(parms.instType ?: settings.instType)
+    && healthyInstTypePref(parms.logLevel ?: settings.logLevel)
+  ) {
+logInfo('A.1.2', 'parse')
+    configure()
+logInfo('A.1.3', 'parse')
+  }
 }
 
 String currentSettingsHtml() {
@@ -275,78 +328,213 @@ String currentSettingsHtml() {
 }
 
 ////
-//// PBSG METHODS AND RELATED STATE/ATTRIBUTES
+//// CORE PBSG METHODS
 ////
 
-
-
-
-
-
-
-
-
-
-
-
-Map getCurr_pushed() {
-  Map b2p = device.currentValue('buttonsToPositions')
-  Map pbsg = device.currentValue('pbsg')
-  return b2p?."${pbsg.active}"
+Map getPbsg(Map pbsg) {
+  Map currPbsg = atomicState.currPbsg
+  if (currPbsg) {
+    logWarn(
+      'getPbsg',
+      "Already has atomicState.currPbsg: ${currPbsg}"
+    )
+  } else {
+    // Copy the most-recently published PBSG state into
+    // atomicState.currPbsg as a point of reference.
+    // Note Map .asImmutable may be implied in State | atomicState.
+    currPbsg = device.currentValue('pbsg')
+    logInfo(
+      'getPbsg',
+      "Saving to atomicState currPbsg: ${currPbsg}"
+    )
+    atomicState.currPbsg = currPbsg
+  }
+  Map nextPbsg = currPbsg ?: [active: null, lifo: []]
+  return nextPbsg
 }
 
-Map getCurr_buttonsToPositions() {
+void putPbsg(Map nextPbsg) {
+  Map currPbsg = atomicState.currPbsg
+  logInfo('A.1.2.5.1', "putPbsg w/ Pbsg: ${currPbsg} -> ${nextPbsg}")
+  //logInfo('putPbsg', "${currPbsg}, nextPbsg: ${nextPbsg}")
+  // ==> Update pbsg (attribute)
+  if (!nextPbsg.equals(currPbsg)) {
+    logInfo('A.1.2.5.1.A', 'putPbsg, before PBSG sendEvent')
+    sendEvent(
+      name: 'pbsg',
+      isStateChange: true,
+      value: nextPbsg,
+      descriptionText: 'PLACEHOLDER ONLY' //pbsg_State(nextPbsg)
+    )
+    logInfo('A.1.2.5.1.B', 'putPbsg, after PBSG sendEvent')
+    //logInfo('putPbsg#B', "AFTER PBSG sendEvent >${nextPbsg}<")
+  }
+  //-> logInfo('putPbsg#C', 'placeholder')
+  // ==> Update pushed (attribute)
+  logInfo('A.1.2.5.2', "putPbsg, active: curr: ${currPbsg?.active} -> ${nextPbsg?.active}")
+  if (!currPbsg || nextPbsg.active != currPbsg.active) {
+    //-> logInfo('putPbsg#D', "PBSG: ${(atomicState.currPbsg as Map} -> ${nextPbsg}")
+    // Note curr_b2P is expected to have been updated prior to
+    // invocation of PBSG methods.
+    logInfo('A.1.2.5.2.A', "putPbsg, before buttonsToPositions retrieval")
+    Map curr_b2P = device.currentValue('buttonsToPositions')
+    logInfo('A.1.2.5.2.B', "putPbsg, curr_b2P: ${curr_b2P}")
+    Integer nextButton = null
+    if (curr_b2P) {
+      logInfo('A.1.2.5.2.B.1', "putPbsg, before nextButton active:${nextPbsg.active}")
+      //logInfo('putPbsg#E', "curr_b2P: ${curr_b2P}")
+      nextButton = curr_b2p?."${nextPbsg.active}"
+      logInfo('A.1.2.5.2.B.2', "putPbsg, nextButton: ${nextButton}")
+    } else {
+      logInfo('A.1.2.5.2.B.3', 'No currentValue for buttonsToPositions')
+    }
+    logInfo('putPbsg#G', ['',
+      "curr_b2P: ${curr_b2P}",
+      "nextButton: ${nextButton}",
+      "nextPbsg: ${nextPbsg}"
+    ].join('<br/>'))
+    logInfo('A.1.2.5.2.C', "putPbsg, w/ curr_b2P: ${curr_b2P}")
+    sendEvent([
+      name: 'pushed',
+      isStateChange: true,
+      value: nextButton,
+      descriptionText: "Pushed ${nextButton} (${nextPbsg.active})"
+    ])
+    logInfo('A.1.2.5.2.D', "putPbsg, w/ curr_b2P: ${curr_b2P}")
+  }
+  logInfo('A.1.2.5.3', "nextPbsg: ${nextPbsg}")
+  // Update child VSWs for consistency
+  nextPbsg.lifo.each{ button ->
+  logInfo('A.1.2.5.3.*', "nextPbsg: turnOffVsw(${button})")
+    turnOffVsw(button)
+  }
+  logInfo('A.1.2.5.4', "nextPbsg.active: turnOnVsw(${nextPbsg.active})")
+  nextPbsg.active && turnOnVsw(nextPbsg.active)
+  logInfo('A.1.2.5.5', 'removing atomicState entry for currPbsg')
+  atomicState.remove('currPbsg')  // Completed checkin cycle
+  logInfo('A.1.2.5.2.E', "putPbsg, atomicState.currPbsg: ${atomicState.currPbsg}")
 }
 
-Map getCurr_pbsg() {
+void pbsg_ActivateButton(Map nextPbsg, String button) {
+  // Make 'button' active (if not already) in nextPbsg.
+  if (nextPbsg?.active == button) {
+    logWarn(
+      'pbsg_ActivateButton',
+      "${b(button)} was already activated"
+    )
+  } else if (!nextPbsg?.lifo.contains(button)) {
+    logWarn(
+      'pbsg_ActivateButton',
+      "${b(button)} not found in lifo (${nextPbsg.lifo})"
+    )
+  } else {
+    // Push any currently active button into lifo.
+    if (nextPbsg.active) { nextPbsg.lifo.push(nextPbsg.active) }
+    // Remove target button from lifo and make it active.
+    nextPbsg.lifo.removeAll([button])
+    nextPbsg.active = button
+  }
+  logInfo('pbsg_ActiveButton', "At exit, nextPbsg: ${nextPbsg}")
 }
 
-
-
-
-
-void sendEvent_pushed() {
-  // TBD: Only issue if active has changed
-  sendEvent([
-    name: 'pushed',
-    isStateChange: true,
-    value: TBD,
-    unit: null,
-    descriptionText: ''
-  ])
+void pbsg_DeactivateButton(Map nextPbsg, String button) {
+  if (nextPbsg.active != button) {
+    logWarn('pbsg_DeactivateButton', "Button (${button}) IS NOT active. ")
+  } else if (nextPbsg.active == settings.dflt) {
+    logWarn(
+      'pbsg_DeactivateButton',
+      "Ignoring request to deactivate the dflt button ${settings.dflt}"
+    )
+  } else if (nextPbsg.active == button) {
+    // Push the currently active button into lifo & clear active.
+    nextPbsg.lifo.push(nextPbsg.active)
+    nextPbsg.active = null
+    // If a default button exists, move it from the Lifo to active.
+    if (settings.dflt) {
+      nextPbsg.lifo.removeAll([settings.dflt])
+      nextPbsg.active = settings.dflt
+    }
+  }
 }
 
-void sendEvent_buttonsToPositions() {
-  // TBD: Only issue if Map has changed
-  sendEvent([
-    name: 'buttonsToPositions',
-    isStateChange: true,
-    value: TBD,
-    unit: null,
-    descriptionText: ''
-  ])
+void pbsg_ActivateLastActive(Map nextPbsg) {
+  // NOTE: Groovy ArrayList Behavior (circa Q2'24)
+  //   +----------------------+----------------------+
+  //   |  Expected Behavior   |   Actual Behavior    |
+  //   +----------------------+----------------------+
+  //   | push(item) PREPENDS  |  push(item) APPENDS  |
+  //   |  item to ArrayList.  |  item to ArrayList.  |
+  //   +----------------------+----------------------+
+  //   | pop() retrieves item | pop() retrieves item |
+  //   |  from ArrayList at   |  from ArrayList at   |
+  //   |          i=0         | i=(lifo.size() - 1)  |
+  //   +----------------------+----------------------+
+  Integer latestPushIndex = nextPbsg.lifo.size() - 1
+  pbsg_ActivateButton(nextPbsg, nextPbsg.lifo[latestPushIndex])
 }
 
-void sendEvent_pbsg() {
-  // TBD: Only issue if pbsg has changed
-  sendEvent([
-    name: 'pbsg',
-    isStateChange: true,
-    value: [
-      active: null,
-      lifo: []
-    ],
-    unit: null,
-    descriptionText: ''
-  ])
+void pbsg_EnforceDefault(Map nextPbsg) {
+  if (nextPbsg
+      && !nextPbsg.active
+      && settings.dflt
+      && settings.dflt != 'not_applicable') {
+    logInfo('pbsg_EnforceDefault', "Activating default ${b(settings.dflt)}")
+    result = pbsg_ActivateButton(nextPbsg, settings.dflt)
+  } //-> else {
+    //-> logInfo('pbsg_EnforceDefault', ['DEBUG:',
+    //->   "nextPbsg.active: ${nextPbsg.active}",
+    //->   "settings.dflt: ${settings.dflt}"
+    //-> ].join('<br/>'))
+  //-> }
+}
+
+String pbsg_ButtonState(Map nextPbsg, String button) {
+  // Assumed: pbsg != null
+  // The supplied PBSG is used without making any changes to its state
+  if (button != null) {
+    String tag = (button == nextPbsg.dflt) ? '*' : ''
+    String summary = "${tag}<b>${button}</b> "
+    DevW vsw = getChildDevice("${device.name}_${button}")
+    String swState = vsw.switch
+    if (swState == 'on') {
+      summary += '(<b>on</b>)'
+    } else if (swState == 'off') {
+      summary += '(<em>off</em>)'
+    } else {
+      logError('pbsg_ButtonState', "Encountered swState: >${swState}<")
+      summary += '(--)'
+    }
+  } else {
+    logError('pbsg_ButtonState', 'button arg is NULL')
+  }
+}
+
+String pbsg_State(Map nextPbsg) {
+  // Assumed: pbsg != null
+  // The supplied PBSG is used without making any changes to its state
+  //   IMPORTANT:
+  //     LIFO push() and pop() are supported, *BUT* pushed items are
+  //     appended (NOTE PREPENDED); so, the list needs to be reverse
+  //     to look like a FIFO.
+  String result
+  if (nextPbsg) {
+    result = "${b(nextPbsg.name)}: "
+    result += (nextPbsg.active) ? "${pbsg_ButtonState(nextPbsg, nextPbsg.active)} " : ''
+    result += '← ['
+    result += nextPbsg.lifo?.reverse().collect { button -> pbsg_ButtonState(nextPbsg, button) }.join(', ')
+    result += ']'
+  } else {
+    logError('pbsg_State', 'Received null PBSG parameter.')
+  }
+  return result
 }
 
 String currentAttributesHtml() {
   return [b('CURRENT ATTRIBUTES:'),
-    "${b('numberOfButtons:')} ${getCurr_numberOfButtons()}",
-    "${b('pushed:')} ${getCurr_pushed()}",
-    "${b('buttonsToPositions:')} ${getCurr_buttonsToPositions()}",
-    "${b('pbsg:')} ${getCurr_pbsg()}"
+    "${b('numberOfButtons:')} ${device.currentValue('numberOfButtons')}",
+    "${b('pushed:')} ${device.currentValue('pushed')}",
+    "${b('buttonsToPositions:')} ${device.currentValue('buttonsToPositions')}",
+    "${b('pbsg:')} ${device.currentValue('pbsg')}"
   ].join('<br/>')
 }
 
@@ -359,184 +547,137 @@ String currentStateHtml() {
   ].join('<br/>')
 }
 
-Map getButtonsToPosition(ArrayList buttons) {
-  buttons.withIndex().collectEntries { b, i -> [b, i] }
+DevW getOrCreateVswWithToggle(String pbsgName, String button) {
+  // Device Network Identifiers DO NOT include white space.
+  // Device Names (exposed to Alexa ...) DO NOT include special characters.
+  String dni = "${pbsgName}_${button}"
+  String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
+  DevW d = getChildDevice(dni)
+  //-> logInfo('getOrCreateVswWithToggle#A', ['',
+  //->   "pbsgName: ${pbsgName}",
+  //->   "button: ${button}",
+  //->   "dni: ${dni}",
+  //->   "name: ${name}"
+  //-> ].join(', '))
+  if (!d) {
+    logWarn('getOrCreateVswWithToggle', "Creating VswWithToggle ${b(dni)}")
+    d = addChildDevice(
+      'wesmc',           // namespace
+      'VswWithToggle',   // typeName
+      dni,               // Device Network Identifier (<pbsgName>_<button>)
+      [
+        isComponent: true,   // Lifecycle is tied to parent
+        name: name,          // "PBSG <pbsgName>"
+        label: name          // "PBSG <pbsgName>"
+      ]
+    )
+    //-> logInfo('getOrCreateVswWithToggle#A', ['',
+    //->   "pbsgName: ${pbsgName}",
+    //->   "button: ${button}",
+    //->   "dni: ${dni}",
+    //->   "name: ${name}",
+    //->   "d: ${d}"
+    //-> ].join('<br/>'))
+  }
+  return d
 }
 
 void configure() {
-  // This function in normally called by ifSufficientSettingsConfigure()
-  // It is possible to bypass the sufficiency tests and call configure
-  // directly due to the presence of capability 'Configuration'.
+  // Start fresh wrt atomicState
+  atomicState.remove('buttons')
+  atomicState.remove('buttonsToVsws')
+  atomicState.remove('buttonToVsws')
+  atomicState.remove('currPbsg')
+  atomicState.remove('logLevel')
+  atomicState.remove('weekdays')
+logInfo('A.1.2.1', 'configure')
+  // Normally
+  //   - This function is called by ifSufficientSettingsConfigure()
+  //     iff all sufficiency tests pass.
+  // Exception
+  //   - It is possible to bypass the sufficiency tests and call configure
+  //     directly.
+  //   - configure() is accessible due to capability 'Configuration'
   update_SettingsDerivatives()
-  logError('configure', 'YOU ARE HERE - NEED TO CONVERT TO NEW MODEL')
-  Map pbsg = [
-    // Seed PBSG with configuration (and derived) data
-    buttons: buttons,                                 // ArrayList
-    dflt: settings.dflt,                              // String
-    isntType: settings.instType,                      // String
-    logLevel: settings.logLevel,                      // String
-    numberOfButtons: buttons.size(),                  // Integer
-    // Add initially-empty state fields
-    active: null,                                     // String
-    lifo: [],                                         // ArrayList
-    pushed: null,                                     // Integer
-    buttonToPosition: getButtonsToPosition(buttons),  // Map
-    display: null                                     // String
+logInfo('A.1.2.2', 'configure')
+  // Create nextPbsg WITHOUT reliance on a prior sendEvent().
+  Map nextPbsg = [
+    active: null,          // String
+    lifo: []               // ArrayList
   ]
+  //=> Map buttonsToVsws = atomicState.buttonsToVsws ?: [:]
   ArrayList expectedChildDnis = []
-  pbsg.buttons.each { button ->
-logInfo('configure#A', "button: ${button}")
+  ArrayList buttonsList = atomicState.buttonsList
+logInfo('A.1.2.3', 'configure')
+  buttonsList.each { button ->
+    //-> logInfo('configure#A', "button: ${button}")
     DevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
+    //=> buttonsToVsws << [button: vsw]
+    //=> logInfo('configure#B', "buttonsToVsws: ${buttonsToVsws}")
     expectedChildDnis << vsw.getDeviceNetworkId()
-logInfo('configure#B', "vsw: ${vsw}")
-    pbsg.lifo.push(button)
-logInfo('configure#C', "lifo: ${pbsg.lifo}")
-    if (switchState(vsw) == 'on') {
+    //-> logInfo('configure#C', "expectedChildDnis: ${expectedChildDnis}")
+    nextPbsg.lifo.push(button)
+    //-> logInfo('configure#D', "lifo: ${nextPbsg.lifo}")
+    //-> if (vsw.switch) == 'on') {
+    if (vsw.switch == 'on') {
       // Move the button from the LIFO to active
-      pbsg_ActivateButton(pbsg, button)
-logInfo('configure#D', "active: ${pbsg.active}, lifo: ${pbsg.lifo}")
-    }
-    if (!pbsg.active) {
-      pbsg_EnforceDefault(pbsg)
-logInfo('configure#E', "active: ${pbsg.active}, lifo: ${pbsg.lifo}")
+      logInfo('configure', "activating ${button} w/ 'on' VSW")
+      pbsg_ActivateButton(nextPbsg, button)
     }
   }
-  ArrayList currentChildDnis = device.getChildDevices().collect { d ->
+logInfo('A.1.2.4', 'configure')
+  if (!nextPbsg.active) {
+    //-> logInfo('configure#Fa', "dflt: ${settings.dflt}, nextPbsg: ${nextPbsg}")
+    pbsg_EnforceDefault(nextPbsg)
+    //-> logInfo('configure#Fb', "dflt: ${settings.dflt}, nextPbsg: ${nextPbsg}")
+  }
+  ArrayList currentChildDnis = getChildDevices().collect { d ->
     d.getDeviceNetworkId()
   }
-  ArrayList orphanedDevies = currentChildDnis.minus(expectedChildDnis)
-  logInfo('configure', ['',
-    "currentChildDnis: ${currentChildDnis}",
-    "expectedChildDnis: ${expectedChildDnis}",
-    "orphanedDevies: ${orphanedDevies}"
-  ])
-  putPbsgState(pbsg)  // Save to atomicState and generate PBSG events.
-  logWarn('configure', 'TBD - Prune any unused child VSWs')
-}
-
-Map getCore() {
-  // "Check out" core fields and operate on them as a unit.
-  return atomicState.core
-}
-
-void putCore(Map core) {
-  // Detect changes in core fields and if changed:
-  //   - "Check in" core fields
-  //   - Reconcile changes to child VSWs
-  //   - Issue appropriate sendEvent()
-  if (!core.equals(atomicState.core)) {
-    Boolean activeChange = core.active != atomicState.core.active
-    atomicState.core = core
-    pbsg_ReconcileVswsToState(pbsg)
-    String briefDescription = "active: ${pbsg.active}, button: ${currentButton}"
-    sendPbsgEvent(briefDescription)
-    if (activeChange) { sendPushableEvent(briefDescription) }
+  ArrayList orphanedDevies = currentChildDnis?.minus(expectedChildDnis)
+  //-> logInfo('configure#G', ['',
+  //->   "currentChildDnis: ${currentChildDnis}",
+  //->   "expectedChildDnis: ${expectedChildDnis}",
+  //->   "orphanedDevies: ${orphanedDevies}"
+  //-> ])
+  //-> logInfo('configure#H', "nextPbsg: ${nextPbsg}")
+logInfo('A.1.2.5', 'configure')
+  putPbsg(nextPbsg)  // Save to atomicState and generate PBSG events.
+logInfo('A.1.2.6', 'configure')
+  orphanedDevices.each { orphan ->
+    logWarn('configure#J', "TBD REMOVE ${orphan} !!!")
   }
+logInfo('A.1.2.7', 'configure')
 }
 
 void activate(String button) {
-  // Intended for a one-shot change (vs ganging with other methods)
-  pbsg = getPbsgState(device.getLabel())
-  pbsg_ActivateButton(pbsg, button)
-  logInfo('activate', "After adjustment, ${showSettings()}")
-  putPbsgState(pbsg)
-}
-
-boolean pbsg_ActivateButton(Map pbsg, String button) {
-  // Intended for ganged operations (PBSG get/put occurs externally)
-  // Assumed: pbsg != null
-  // Returns true on a PBSG state change
-  boolean result = false
-  if (pbsg.active == button) {
-    logWarn('pbsg_ActivateButton', "${b(button)} was already activated")
-  } else {
-    if (pbsg.active) {
-      pbsg.lifo.push(pbsg.active)
-      result = true
-    }
-    if (pbsg.lifo.contains(button)) {
-      pbsg.active = button
-      pbsg.lifo.removeAll([button])
-      result = true
-    } else {
-      logError('pbsg_ActivateButton', "Unable to find button ${b(button)}")
-      // The PBSG's state is NOT changed.
-    }
-  }
-  return result
+  // User accessible
+  logInfo('activate', button)
+  Map nextPbsg = getPbsg()
+  pbsg_ActivateButton(nextPbsg, button)
+  putPbsg(nextPbsg)
 }
 
 void deactivate(String button) {
-  // Intended for a one-shot change (vs ganging with other methods)
-  pbsg = getPbsgState(device.getLabel())
-  pbsg_DeactivateButton(pbsg, button)
-  logInfo('deactivate', "After adjustment, ${showSettings()}")
-  putPbsgState(pbsg)
+  // User accessible
+  logInfo('deactivate', button)
+  nextPbsg = getPbsg()
+  pbsg_DeactivateButton(nextPbsg, button)
+  putPbsg(nextPbsg)
 }
-
-boolean pbsg_DeactivateButton(Map pbsg, String button) {
-  // Intended for ganged operations (PBSG get/put occurs externally)
-  // Assumed: pbsg != null
-  // Returns true on a PBSG state change
-  boolean result = false
-  if (button == pbsg.dflt) {
-    logWarn(
-      'pbsg_DeactivateButton',
-      "Ignoring the requested deactivation of default button ${b(button)}"
-    )
-  } else if (pbsg.active == button) {
-    if (pbsg.dflt) {
-      // Swap currentlt active button with default button
-      logTrace('pbsg_Deactivate', "Activating default ${b(pbsg.dflt)}")
-      pbsg_ActivateButton(pbsg, pbsg.dflt)
-    } else {
-      // Deactivate active button only
-      pbsg.lifo.push(pbsg.active)
-    }
-    result = true
-  } else if (pbsg.lifo.contains(button)) {
-    logWarn('pbsg_DeactivateButton', "${b(button)} was already deactivated")
-  } else {
-    logError('pbsg_DeactivateButton', "${b(button)} was not found")
-  }
-  return result
-}
-
 
 void activateLastActive() {
-  // Intended for a one-shot change (vs ganging with other methods)
-  pbsg = getPbsgState(device.getLabel())
-  pbsg_ActivateLastActive(pbsg)
-  logInfo('activateLastActive', "After adjustment, ${showSettings()}")
-  putPbsgState(pbsg)
-}
-
-boolean pbsg_ActivateLastActive(Map pbsg) {
-  // Intended for ganged operations (PBSG get/put occurs externally)
-  // Assumed: pbsg != null
-  // -----------------------------------------------------------------
-  // I M P O R T A N T   (circa Q2'24)
-  //   The Groovy ListArray implementation operates in reverse order
-  //     - push(item) APPENDS the item to [] instead of PREPENDING it
-  //     - pop() retrieves the last item pushed, at 'lifo.size() - 1'
-  //       rather than position '0' per current Groovy docs.
-  // -----------------------------------------------------------------
-  Integer latestPushIndex = pbsg.lifo.size() - 1
-  return pbsg_ActivateButton(pbsg, pbsg.lifo[latestPushIndex])
-}
-
-boolean pbsg_EnforceDefault(Map pbsg) {
-  // Assumed: pbsg != null
-  // Returns true on a PBSG state change
-  boolean result = false
-  if (pbsg && !pbsg.active && pbsg.dflt) {
-    logInfo('pbsg_EnforceDefault', "Activating default ${b(pbsg.dflt)}")
-    result = pbsg_ActivateButton(pbsg, pbsg.dflt)
-  }
-  return result
+  logInfo('activateLastActive', 'no args')
+  nextPbsg = getPbsg()
+  pbsg_ActivateLastActive(nextPbsg)
+  putPbsg(nextPbsg)
 }
 
 // Process Methods on behalf of Child Devices
+
+String vswToButtonName(DevW d) {
+  return d.getLabel().tokenize('_')[1]
+}
 
 void vswWithToggleOn(DevW d) {
   String button = vswToButtonName(d)
@@ -558,77 +699,46 @@ void vswWithTogglePush(DevW d) {
 // Direct Child State Changes
 
 void turnOnVsw(String button) {
-  DevW d = fetchVswWithToggle(button)
-  d.parse([
-    name: 'switch',
-    value: 'on',
-    descriptionText: "${d.name} was turned on",
-    isStateChange: true
-  ])
+  logInfo('turnOnVsw', button)
+  String dni = "${device.getLabel()}_${button}"
+  DevW d = getChildDevice(dni)
+  if (d) {
+    d.parse([
+      name: 'switch',
+      value: 'on',
+      descriptionText: "${dni} was turned on",
+      isStateChange: true
+    ])
+  } else {
+    logError(
+      'turnOnVsw',
+      "Device (${dni}) for button (${button}) not found"
+    )
+  }
 }
 
 void turnOffVsw(String button) {
-  DevW d = fetchVswWithToggle(button)
-  d.parse([
-    name: 'switch',
-    value: 'off',
-    descriptionText: "${d.name} was turned off",
-    isStateChange: true
-  ])
+  logInfo('turnOffVsw', button)
+  Map b2v = atomicState.buttonToVsws
+  DevW d = b2v?."${button}"
+  if (d) {
+    d.parse([
+      name: 'switch',
+      value: 'off',
+      descriptionText: "${d.getLabel()} was turned off",
+      isStateChange: true
+    ])
+  } else {
+    logError('turnOffVsw', "Device for button (${button} not found),")
+  }
 }
 
 // Methods Expected for Advertised Capabilities
 
 void push(Integer buttonNumber) {
-  String button = atomicState.bNumberToBName[buttonNumber]
-  logInfo('push', "Received ${button} (#${buttonNumber})")
-  activateButton(button) && syncVswsAndIssueCallback()
-}
-
-////
-//// TO BE CONVERTED
-////
-
-String pbsg_ButtonState(Map pbsg, String button) {
-  // Assumed: pbsg != null
-  // The supplied PBSG is used without making any changes to its state
-  if (button != null) {
-    String tag = (button == pbsg.dflt) ? '*' : ''
-    String summary = "${tag}<b>${button}</b> "
-    DevW vsw = getChildDevice("${pbsg.name}_${button}")
-    String swState = switchState(vsw)
-      ?: logError('pbsg_ButtonState', "switchState() failed for button (${button}).")
-    if (swState == 'on') {
-      summary += '(<b>on</b>)'
-    } else if (swState == 'off') {
-      summary += '(<em>off</em>)'
-    } else {
-      logError('pbsg_ButtonState', "Encountered swState: >${swState}<")
-      summary += '(--)'
-    }
-  } else {
-    logError('pbsg_ButtonState', 'button arg is NULL')
-  }
-}
-
-String pbsg_State(Map pbsg) {
-  // Assumed: pbsg != null
-  // The supplied PBSG is used without making any changes to its state
-  //   IMPORTANT:
-  //     LIFO push() and pop() are supported, *BUT* pushed items are
-  //     appended (NOTE PREPENDED); so, the list needs to be reverse
-  //     to look like a FIFO.
-  String result
-  if (pbsg) {
-    result = "${b(pbsg.name)}: "
-    result += (pbsg.active) ? "${pbsg_ButtonState(pbsg, pbsg.active)} " : ''
-    result += '← ['
-    result += pbsg.lifo?.reverse().collect { button -> pbsg_ButtonState(pbsg, button) }.join(', ')
-    result += ']'
-  } else {
-    logError('pbsg_State', 'Received null PBSG parameter.')
-  }
-  return result
+  String button = atomicState?.buttons[buttonNumber - 1]
+  logInfo('push', "Received ${buttonNumber} (${button})")
+  activateButton(button)
 }
 
 //// UNUSED / UNSUPPORTED
