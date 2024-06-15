@@ -40,7 +40,56 @@ void pbsgHandler(Event e) {
   // This very-generic handler logs events for:
   //   - Multiple PBSG Instances
   //   - Multiple PBSG Event Types
+  switch(e.name) {
+    case 'numberOfButtons':
+      Integer val = e.value.toInteger()
+      logInfo('pbsgHandler', ['e.name',
+        e.descriptionText,
+        "sender: ${e.displayName} (${deviceId})",
+        "numberOfButtons: ${val}"
+      ].join('<br/>'))
+      break;
+    case 'pushed':
+      Integer val = e.value.toInteger()
+      logInfo('pbsgHandler', ['e.name',
+        e.descriptionText,
+        "sender: ${e.displayName} (${deviceId})",
+        "pushedButton: ${val}"
+      ].join('<br/>'))
+      break;
+    case 'jsonPbsg':
+      Map pbsg = fromJson(e.value)
+      logInfo('pbsgHandler', ['e.name',
+        e.descriptionText,
+        "sender: ${e.displayName} (${deviceId})",
+        "pbsg: ${pbsg}"
+      ].join('<br/>'))
+      break;
+    case 'active':
+      logInfo('pbsgHandler', ['e.name',
+        e.descriptionText,
+        "sender: ${e.displayName} (${deviceId})",
+        "active: ${e.value}"
+      ].join('<br/>'))
+      break;
+    case 'jsonLifo':
+      ArrayList lifo = fromJson(e.value)
+      logInfo('pbsgHandler', ['e.name',
+        e.descriptionText,
+        "sender: ${e.displayName} (${deviceId})",
+        "lifo: ${lifo}"
+      ].join('<br/>'))
+      break;
+    default:
+      logWarn('pbsgHandler', [b('Unexpected Event'),
+        e.eventDetails
+      ].join('<br/>'))
+  }
   logInfo('pbsgHandler', eventDetails(e))
+
+
+
+
 }
 
 ////
@@ -245,7 +294,7 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   solicitTestSequence(testSequenceJson, pbsgName)
 }
 
-void configurePbsgUsingParse(DevW pbsg) {
+void configPbsgUsingParse(DevW pbsg) {
   // Per 'pbsg.groovy', there are two facilities for configuring a PBSG:
   //   (1) MANUALLY: Using the Hubitat GUI's device drilldown page.
   //   (2) PROGRAMMATICALLY: Using the PBSG's parse(String json) method.
@@ -254,17 +303,18 @@ void configurePbsgUsingParse(DevW pbsg) {
   // JSON representation of the Map to the PBSG's parse(..) method.
   if (pbsg.name) {
     String prefix = "${pbsg.name}_"
+    logTrace('configPbsgUsingParse', 'Creating prefs Map')
     Map prefs = [
       buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
       dflt: defaultButton(prefix),
       instType: 'pbsg',
       logLevel: 'INFO'
     ]
-logInfo('A.1', 'configurePbsgUsingParse')
-    pbsg.parse(toJson(prefs))
-logInfo('A.2', 'configurePbsgUsingParse')
+    String jsonPrefs = toJson(prefs)
+    logTrace('configPbsgUsingParse', "Calling parse(${jsonPrefs})")
+    pbsg.parse(jsonPrefs)
   } else {
-    logError('configurePbsgUsingParse', 'Argument "pbsgName" was null')
+    logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
   }
 }
 
@@ -384,7 +434,7 @@ DevW getOrCreatePBSG(String pbsgName) {
 }
 
 void initialize() {
-  setLogLevel('INFO')
+  setLogLevel('TRACE')  // Use 'INFO' to reduce logging.
   // For each pbsgName:
   //   - Process the user-provided 'settings' into a PBSG configuration Map.
   //   - The PBSG configuration Map is preserved as a top-level Map in state
@@ -393,7 +443,6 @@ void initialize() {
   //   - Top-level Maps in state are efficiently processed with the
   //     atomicState() and atomicState.updateMapValue(...).
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
-  logInfo('initialize', "settings->${settings.pbsgNames}, pbsgNames: ${pbsgNames}")
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
     // CREATE THE PBSG INSTANCE
@@ -404,53 +453,43 @@ void initialize() {
     //           dflt: ...,   // The default button name or null
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
+    logTrace('initialize', "Creating PBSG instance: ${pbsgNames}.")
     DevW pbsg = getOrCreatePBSG(pbsgName)
+    logTrace('initialize', 'Subscribing "pbsgHandler()" to all events.')
     subscribe(pbsg, pbsgHandler, ['filterEvents': true])
-    logInfo('A', 'Initialize')
-    configurePbsgUsingParse(pbsg)
-    logInfo('B', 'Initialize')
+    logTrace('initialize', 'Sending perference data via PBSG parse() method.')
+    configPbsgUsingParse(pbsg)
     // BUILD AND RUN ANY TEST SEQUENCES
-    logInfo('initialize#NOTE_A', 'Entering build/run test sequences')
+    logInfo('initialize', 'Preparing to run custom test sequence.')
     ArrayList testSeqList = getTestSequence(pbsgName)
     Integer actionCnt = testSeqList.size()
     testSeqList?.eachWithIndex{ testAction, index ->
-      logInfo('initialize#NOTE_B', "Taking Action ${index + 1} of ${actionCnt}: ${b(testAction)}")
+      String actionLabel = "Action ${index + 1} of ${actionCnt}:"
+      logInfo('initialize', "${actionLabel} ${b(testAction)}")
       if (testAction == 'Activate_last_active') {
-        //pbsg_ActivateLastActive(pbsg) && putPbsgState(pbsg)
         pbsg.activateLastActive()
       } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
-          String target = tokenizedAction[0]  // Could be a button or a VSW
+          String target = tokenizedAction[0]
           String action = tokenizedAction[1]
-          logInfo('initialize#NOTE_C', "target: ${target}, action ${action}")
-          //logInfo('initialize#258', "${pbsg_State(pbsg)} -> ${button} : ${action}")
           switch (action) {
             case 'ButtonOn':
-              //pbsg_ActivateButton(pbsg, target) && putPbsgState(pbsg)
-      logInfo('initialize#NOTE_D', 'ButtonOn')
               pbsg.activate(target)
               break
             case 'ButtonOff':
-              //pbsg_DeactivateButton(pbsg, target) && putPbsgState(pbsg)
-      logInfo('initialize#NOTE_E', 'ButtonOff')
               pbsg.deactivate(target)
               break
             case 'VswOn':
-              // Simulate an external VSW on
-      logInfo('initialize#NOTE_F', 'VswOn')
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
-              logInfo('initialize', "Turning ${vsw.name} on")
               vsw.on()
-              pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
+              //??pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             case 'VswOff':
               // Simulate an external VSW off
-      logInfo('initialize#NOTE_G', 'VswOff')
               DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
-              logInfo('initialize', "Turning VSW ${vsw.name} off")
               vsw.off()
-              pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
+              //??pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
               break
             default:
               logError('initialize', [

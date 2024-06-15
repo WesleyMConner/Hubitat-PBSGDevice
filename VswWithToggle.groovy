@@ -69,7 +69,6 @@ void configure() {
   //-> ].join('<br/>'))
 }
 
-
 void updated() {
   logInfo('updated', 'Entered')
   // Runs when save is clicked in the preferences section
@@ -135,5 +134,3 @@ void parse(ArrayList actions) {
     }
   }
 }
-
-// Supporting functions
