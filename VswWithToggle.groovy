@@ -24,15 +24,11 @@ metadata {
     importUrl: 'PENDING',
     singleThreaded: 'false'
   ) {
-    capability "Configuration"   // Methods
-                                 //   - configure()
-    capability "Switch"     // Attribtes
-                            //   - switch: ['on'|'off']
-                            // Methods
-                            //   - on()
-                            //   - off()
-    capability "Momentary"  // Methods
-                            //   - push()
+    capability "Configuration"   // Commands:  configure()
+    capability "Switch"          // Attribtes:
+                                 //   - switch: ['on'|'off']
+                                 // Commands: on(), off()
+    capability "Momentary"       // Commands: push()
   }
   preferences {
     input(

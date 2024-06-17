@@ -15,9 +15,11 @@
 // For reference:
 //   Unicode 2190 ← LEFTWARDS ARROW
 //   Unicode 2192 → RIGHTWARDS ARROW
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
+import groovy.json.JsonOutput    // See wesmc.lUtils
+import groovy.json.JsonSlurper   // See wesmc.lUtils
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
 #include wesmc.lUtils
@@ -36,60 +38,63 @@ definition (
 //// GENERAL-PURPOSE EVENT HANDLER
 ////
 
-void pbsgHandler(Event e) {
-  // This very-generic handler logs events for:
-  //   - Multiple PBSG Instances
-  //   - Multiple PBSG Event Types
-  switch(e.name) {
-    case 'numberOfButtons':
-      Integer val = e.value.toInteger()
-      logInfo('pbsgHandler', ['e.name',
-        e.descriptionText,
-        "sender: ${e.displayName} (${deviceId})",
-        "numberOfButtons: ${val}"
-      ].join('<br/>'))
-      break;
-    case 'pushed':
-      Integer val = e.value.toInteger()
-      logInfo('pbsgHandler', ['e.name',
-        e.descriptionText,
-        "sender: ${e.displayName} (${deviceId})",
-        "pushedButton: ${val}"
-      ].join('<br/>'))
-      break;
-    case 'jsonPbsg':
-      Map pbsg = fromJson(e.value)
-      logInfo('pbsgHandler', ['e.name',
-        e.descriptionText,
-        "sender: ${e.displayName} (${deviceId})",
-        "pbsg: ${pbsg}"
-      ].join('<br/>'))
-      break;
-    case 'active':
-      logInfo('pbsgHandler', ['e.name',
-        e.descriptionText,
-        "sender: ${e.displayName} (${deviceId})",
-        "active: ${e.value}"
-      ].join('<br/>'))
-      break;
-    case 'jsonLifo':
-      ArrayList lifo = fromJson(e.value)
-      logInfo('pbsgHandler', ['e.name',
-        e.descriptionText,
-        "sender: ${e.displayName} (${deviceId})",
-        "lifo: ${lifo}"
-      ].join('<br/>'))
-      break;
-    default:
-      logWarn('pbsgHandler', [b('Unexpected Event'),
-        e.eventDetails
-      ].join('<br/>'))
+void pbsg_numberOfButtonsHandler(Event e) {
+  if (e.name == 'numberOfButtons') {
+    Integer val = e.value.toInteger()
+    logInfo('pbsg_numberOfButtonsHandler', ['',
+      "${b(e.displayName)} ${i('(e.deviceId)')}",
+      "${e.name}: ${b(val)}"
+    ].join('<br/>'))
+  } else {
+    logError('pbsg_numberOfButtonsHandler', "Unexpected event: ${eventDetails(e)}")
   }
-  logInfo('pbsgHandler', eventDetails(e))
+}
 
+void pbsg_pushedHandler(Event e) {
+  if (e.name == 'pushed') {
+    Integer val = e.value.toInteger()
+    logInfo('pbsg_pushedHandler', ['',
+      "${b(e.displayName)} ${i('(e.deviceId)')}",
+      "${e.name}: ${b(val)}"
+    ].join('<br/>'))
+  } else {
+    logError('pbsg_pushedHandler', "Unexpected event: ${eventDetails(e)}")
+  }
+}
 
+void pbsg_jsonPbsgHandler(Event e) {
+  if (e.name == 'jsonPbsg') {
+    Map pbsg = fromJson(e.value)
+    logInfo('pbsg_jsonPbsgHandler', ['',
+      "${b(e.displayName)} ${i('(e.deviceId)')}",
+      "${e.name}: ${b(pbsg)}"
+    ].join('<br/>'))
+  } else {
+    logError('pbsg_jsonPbsgHandler', "Unexpected event: ${eventDetails(e)}")
+  }
+}
 
+void pbsg_activeHandler(Event e) {
+  if (e.name == 'active') {
+    logInfo('pbsg_activeHandler', ['',
+      "${b(e.displayName)} ${i('(e.deviceId)')}",
+      "${e.name}: ${b(e.value)}"
+    ].join('<br/>'))
+  } else {
+    logError('pbsg_activeHandler', "Unexpected event: ${eventDetails(e)}")
+  }
+}
 
+void pbsg_jsonLifoHandler(Event e) {
+  if (e.name == 'jsonLifo') {
+    ArrayList lifo = fromJson(e.value)
+    logInfo('pbsg_jsonLifoHandler', ['',
+      "${b(e.displayName)} ${i('(e.deviceId)')}",
+      "${e.name}: ${b(lifo)}"
+    ].join('<br/>'))
+  } else {
+    logError('pbsg_jsonLifoHandler', "Unexpected event: ${eventDetails(e)}")
+  }
 }
 
 ////
@@ -245,7 +250,22 @@ void removeTestSequence(String pbsgName = null) {
 }
 
 ArrayList getTestSequence(String pbsgName) {
-  return fromJson(settings?."${pbsgName}_testSequence")
+  ArrayList result = []
+  if (settings) {
+    String settingsKey = "${pbsgName}_testSequence"
+    logInfo('getTestSequence#A', "settingsKey: ${settingsKey}")
+    String value = settings."${settingsKey}"
+    if (value) {
+      logInfo('getTestSequence#B', "value: ${value}")
+      result = fromJson(value)
+      logInfo('getTestSequence#C', "result: ${result}")
+    } else {
+      logError('getTestSequence#D', 'Encountered null value at key')
+    }
+  } else {
+    logError('getTestSequence#E', 'Encountered null settings')
+  }
+  return result
 }
 
 ////
@@ -261,6 +281,7 @@ ArrayList getTestActions(String pbsgName) {
     testActions << "${b}_ButtonOff"
     testActions << "${b}_VswOn"
     testActions << "${b}_VswOff"
+    testActions << "${b}_VswPush"
   }
   testActions.add('Activate_last_active')
   //testActions << 'No more actions'
@@ -301,9 +322,9 @@ void configPbsgUsingParse(DevW pbsg) {
   // This method demonstrates programatic configuration. It collects settings
   // solicited by 'page1_CreatePBSGs' into a Map. Then, passes a
   // JSON representation of the Map to the PBSG's parse(..) method.
-  if (pbsg.name) {
-    String prefix = "${pbsg.name}_"
-    logTrace('configPbsgUsingParse', 'Creating prefs Map')
+  String pbsgName = pbsg.getLabel()
+  if (pbsgName) {
+    String prefix = "${pbsgName}_"
     Map prefs = [
       buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
       dflt: defaultButton(prefix),
@@ -311,7 +332,10 @@ void configPbsgUsingParse(DevW pbsg) {
       logLevel: 'INFO'
     ]
     String jsonPrefs = toJson(prefs)
-    logTrace('configPbsgUsingParse', "Calling parse(${jsonPrefs})")
+    logTrace('configPbsgUsingParse', ['',
+      "Calling pbsg ${b(pbsgName)} parse() with:",
+      "${b(jsonPrefs)}"
+    ].join('<br/>'))
     pbsg.parse(jsonPrefs)
   } else {
     logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
@@ -346,7 +370,10 @@ Map page1_CreatePBSGs() {
 Map page2_TestActions() {
   return dynamicPage(
     name: 'page2_TestActions',
-    title: h1('Page 2 of 3 - List per-PBSG available Test Actions'),
+    title: [
+      h1('Page 2 of 3 - List per-PBSG available Test Actions'),
+      h2('VswWithToggle devices support on(), off() AND push() to toggle')
+    ].join('<br/>'),
     uninstall: true
   ) {
     section {
@@ -453,17 +480,33 @@ void initialize() {
     //           dflt: ...,   // The default button name or null
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
-    logTrace('initialize', "Creating PBSG instance: ${pbsgNames}.")
+    logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
     DevW pbsg = getOrCreatePBSG(pbsgName)
-    logTrace('initialize', 'Subscribing "pbsgHandler()" to all events.')
-    subscribe(pbsg, pbsgHandler, ['filterEvents': true])
-    logTrace('initialize', 'Sending perference data via PBSG parse() method.')
+    logTrace('initialize',
+      "Subscribing ${b('pbsg_pushedHandler()')} to ${b('pushed')} events."
+    )
+    subscribe(pbsg, 'pushed', pbsg_pushedHandler, ['filterEvents': true])
+    logTrace('initialize',
+      "Subscribing ${b('pbsg_jsonPbsgHandler()')} to ${b('jsonPbsg')} events."
+    )
+    subscribe(pbsg, 'jsonPbsg', pbsg_jsonPbsgHandler, ['filterEvents': true])
+    logTrace('initialize',
+      "Subscribing ${b('pbsg_activeHandler()')} to ${b('active')} events."
+    )
+    subscribe(pbsg, 'active', pbsg_activeHandler, ['filterEvents': true])
+    logTrace('initialize',
+      "Subscribing ${b('pbsg_jsonLifoHandler()')} to ${b('jsonLifo')} events."
+    )
+    subscribe(pbsg, 'jsonLifo', pbsg_jsonLifoHandler, ['filterEvents': true])
     configPbsgUsingParse(pbsg)
     // BUILD AND RUN ANY TEST SEQUENCES
     logInfo('initialize', 'Preparing to run custom test sequence.')
     ArrayList testSeqList = getTestSequence(pbsgName)
+logInfo('initialize', "testSeqList: ${testSeqList}")
     Integer actionCnt = testSeqList.size()
+logInfo('initialize', "actionCnt: ${actionCnt}")
     testSeqList?.eachWithIndex{ testAction, index ->
+logInfo('initialize', "testAction: ${testAction}, index: ${index}")
       String actionLabel = "Action ${index + 1} of ${actionCnt}:"
       logInfo('initialize', "${actionLabel} ${b(testAction)}")
       if (testAction == 'Activate_last_active') {
@@ -481,15 +524,13 @@ void initialize() {
               pbsg.deactivate(target)
               break
             case 'VswOn':
-              DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
-              vsw.on()
-              //??pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
+              pbsg.testVswOn(target)
               break
             case 'VswOff':
-              // Simulate an external VSW off
-              DevW vsw = getOrCreateVswWithToggle(pbsg.name, target)
-              vsw.off()
-              //??pbsg = getPbsgState(pbsgName)  // Refresh pbsg state
+              pbsg.testVswOff(target)
+              break
+            case 'VswPush':
+              pbsg.testVswPush(target)
               break
             default:
               logError('initialize', [

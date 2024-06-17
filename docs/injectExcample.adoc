@@ -1,0 +1,10 @@
+= Inject Example
+```
+// Map reduce approach?
+Map extractCleanPbsgV2(Map pbsg) {
+  return pbsg.inject([:]) { m, k, v ->
+    if (['active', 'lifo'].contains(k)) { m."${k}" = v }
+    m
+  }
+}
+```
