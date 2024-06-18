@@ -48,7 +48,7 @@ metadata {
 void installed() {
   // Runs when driver is installed
   //-> setLogLevel(settings.logLevel)
-  logInfo('installed', 'Entered')
+  logTrace('installed', 'Entered')
   settings?.logLevel && setLogLevel(settings.logLevel)
   //-> logInfo('installed', ['',
   //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
@@ -56,7 +56,7 @@ void installed() {
 }
 
 void configure() {
-  logInfo('configure', 'Entered')
+  logTrace('configure', 'Entered')
   // Runs due to presence of capability "Configuration"
   settings?.logLevel && setLogLevel(settings.logLevel)
   //-> setLogLevel(settings.logLevel)
@@ -66,7 +66,7 @@ void configure() {
 }
 
 void updated() {
-  logInfo('updated', 'Entered')
+  logTrace('updated', 'Entered')
   // Runs when save is clicked in the preferences section
   //-> setLogLevel(settings.logLevel)
   //-> logInfo('updated', ['',
@@ -75,7 +75,7 @@ void updated() {
 }
 
 void uninstalled() {
-  logInfo('uninstalled', 'Entered')
+  logTrace('uninstalled', 'Entered')
   // Runs on device tear down
   //-> setLogLevel(settings.logLevel)
   //-> logInfo('uninstalled', ['',
@@ -84,7 +84,7 @@ void uninstalled() {
 }
 
 void initialize() {
-  logInfo('initialize', 'Entered')
+  logTrace('initialize', 'Entered')
   // Runs when called, typically by installed() and updated()
   //-> setLogLevel(settings.logLevel)
   //-> logInfo('initialize', ['',
@@ -120,7 +120,7 @@ void parse(ArrayList actions) {
   //                  unit: Omitted if boolean, '%', ...
   //       descriptionText: Human-friendly string
   //         isStateChange: true|false
-  logInfo('parse', "actions: ${actions}")
+  logTrace('parse', "actions: ${actions}")
   actions.each{ action ->
     if (action?.name in ['switch']) {
       logInfo('parse', action.descriptionText)

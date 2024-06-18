@@ -410,26 +410,29 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
     logTrace('ciPbsg', "Updated PBSG: ${pbsg_State(pbsg)}")
   }
   if (activeChanged) {
-    Integer priorPushed = buttonNameToPushed(pbsg.priorActive)
-    Integer pushed = buttonNameToPushed(pbsg.active)
-    String desc = "${pbsg.priorActive} (${i(priorPushed)}) → ${b(pbsg.active)} (${pushed})"
-    logTrace('ciPbsg', "Updating attribute 'active': ${b(pbsg.active)}")
+    String activeDesc = "${i(pbsg.priorActive)} → ${b(pbsg.active)}"
+    logTrace('ciPbsg', "Updating active: ${activeDesc}")
     device.sendEvent(
       name: 'active',
       isStateChange: true,
       value: pbsg.active,
-      descriptionText: desc
+      descriptionText: activeDesc
     )
+    Integer priorPushed = buttonNameToPushed(pbsg.priorActive)
+    Integer pushed = buttonNameToPushed(pbsg.active)
+    String pushedDesc = "${i(priorPushed)} → ${b(pushed)}"
+    //logTrace('ciPbsg', "Updating attribute 'active': ${b(pbsg.active)}")
+    logTrace('ciPbsg', "Updating pushed: ${pushedDesc}")
     device.sendEvent(
       name: 'pushed',
       isStateChange: true,
       value: pushed,
-      descriptionText: desc
+      descriptionText: pushedDesc
     )
   }
   if (lifoChanged) {
     String desc = "${i(pbsg.priorLifo)} → ${b(pbsg.lifo)}"
-    logTrace('ciPbsg', "Updating attribute lifo: ${bList(pbsg.lifo)}")
+    logTrace('ciPbsg', "Updating lifo: ${desc}")
     device.sendEvent(
       name: 'jsonLifo',
       isStateChange: true,
@@ -457,9 +460,7 @@ Map pbsg_ActivateButton(Map pbsg, String button) {
     // Remove target button from lifo and make it active.
     pbsg.lifo.removeAll([button])
     pbsg.active = button
-    logTrace('pbsg_ActivateButton', ["after activate ${b(button)}",
-      pbsg_State(pbsg)
-    ].join('<br/>'))
+    logTrace('pbsg_ActivateButton', "${b(button)} ⟹ ${bMap(pbsg)}")
   }
   return pbsg
 }
@@ -482,9 +483,7 @@ Map pbsg_DeactivateButton(Map pbsg, String button) {
       pbsg.lifo.removeAll([settings.dflt])
       pbsg.active = settings.dflt
     }
-    logTrace('pbsg_DeactivateButton', ["after deactivate ${b(button)}",
-      pbsg_State(pbsg)
-    ].join('<br/>'))
+    logTrace('pbsg_DeactivateButton', "${b(button)} ⟹ ${bMap(pbsg)}")
   }
   return pbsg
 }
@@ -514,9 +513,10 @@ Map pbsg_EnforceDefault(Map pbsg) {
       && settings.dflt
       && settings.dflt != 'not_applicable') {
     result = pbsg_ActivateButton(pbsg, settings.dflt)
-    logTrace('pbsg_EnforceDefault', ["after default ${b(settings.dflt)}",
-      pbsg_State(pbsg)
-    ].join('<br/>'))
+    logTrace(
+      'pbsg_EnforceDefault',
+      "${b(settings.dflt)} ⟹ ${bMap(pbsg)}"
+    )
   }
   return pbsg
 }
@@ -572,21 +572,21 @@ String pbsg_State(Map pbsg) {
 ////   - The PBSG map is checked in (ci)
 
 void activate(String button) {
-  logInfo('activate', button)
+  logTrace('activate', button)
   Map pbsg = coPbsg()
   pbsg_ActivateButton(pbsg, button)
   ciPbsg(pbsg)
 }
 
 void deactivate(String button) {
-  logInfo('deactivate', button)
+  logTrace('deactivate', button)
   pbsg = coPbsg()
   pbsg_DeactivateButton(pbsg, button)
   ciPbsg(pbsg)
 }
 
 void activateLastActive() {
-  logInfo('activateLastActive', 'no args')
+  logTrace('activateLastActive', 'no args')
   pbsg = coPbsg()
   pbsg_ActivateLastActive(pbsg)
   ciPbsg(pbsg)

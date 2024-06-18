@@ -38,62 +38,61 @@ definition (
 //// GENERAL-PURPOSE EVENT HANDLER
 ////
 
-void pbsg_numberOfButtonsHandler(Event e) {
+String eSender(Event e) {
+  return "${b(e.displayName)} (${i(e.deviceId)})"
+}
+
+void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
-    logInfo('pbsg_numberOfButtonsHandler', ['',
-      "${b(e.displayName)} ${i('(e.deviceId)')}",
-      "${e.name}: ${b(val)}"
-    ].join('<br/>'))
+    logInfo('handle_numberOfButtons',
+      "Received '${e.name}': ${b(val)} from ${eSender(e)}"
+    )
   } else {
-    logError('pbsg_numberOfButtonsHandler', "Unexpected event: ${eventDetails(e)}")
+    logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
-void pbsg_pushedHandler(Event e) {
+void handle_pushed(Event e) {
   if (e.name == 'pushed') {
     Integer val = e.value.toInteger()
-    logInfo('pbsg_pushedHandler', ['',
-      "${b(e.displayName)} ${i('(e.deviceId)')}",
-      "${e.name}: ${b(val)}"
-    ].join('<br/>'))
+    logInfo('handle_pushed',
+      "Received '${e.name}': ${b(val)} from ${eSender(e)}"
+    )
   } else {
-    logError('pbsg_pushedHandler', "Unexpected event: ${eventDetails(e)}")
+    logError('handle_pushed', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
-void pbsg_jsonPbsgHandler(Event e) {
+void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     Map pbsg = fromJson(e.value)
-    logInfo('pbsg_jsonPbsgHandler', ['',
-      "${b(e.displayName)} ${i('(e.deviceId)')}",
-      "${e.name}: ${b(pbsg)}"
-    ].join('<br/>'))
+    logInfo('handle_jsonPbsg',
+      "Received 'PBSG' (decoded): ${bMap(pbsg)} from ${eSender(e)}"
+    )
   } else {
-    logError('pbsg_jsonPbsgHandler', "Unexpected event: ${eventDetails(e)}")
+    logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
-void pbsg_activeHandler(Event e) {
+void handle_active(Event e) {
   if (e.name == 'active') {
-    logInfo('pbsg_activeHandler', ['',
-      "${b(e.displayName)} ${i('(e.deviceId)')}",
-      "${e.name}: ${b(e.value)}"
-    ].join('<br/>'))
+    logInfo('handle_active',
+      "Received '${e.name}': ${b(e.value)} from ${eSender(e)}"
+    )
   } else {
-    logError('pbsg_activeHandler', "Unexpected event: ${eventDetails(e)}")
+    logError('handle_active', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
-void pbsg_jsonLifoHandler(Event e) {
+void handle_jsonLifo(Event e) {
   if (e.name == 'jsonLifo') {
     ArrayList lifo = fromJson(e.value)
-    logInfo('pbsg_jsonLifoHandler', ['',
-      "${b(e.displayName)} ${i('(e.deviceId)')}",
-      "${e.name}: ${b(lifo)}"
-    ].join('<br/>'))
+    logInfo('handle_jsonLifo',
+      "received LIFO (decoded): ${bList(lifo)} from ${eSender(e)}"
+    )
   } else {
-    logError('pbsg_jsonLifoHandler', "Unexpected event: ${eventDetails(e)}")
+    logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
@@ -253,12 +252,9 @@ ArrayList getTestSequence(String pbsgName) {
   ArrayList result = []
   if (settings) {
     String settingsKey = "${pbsgName}_testSequence"
-    logInfo('getTestSequence#A', "settingsKey: ${settingsKey}")
     String value = settings."${settingsKey}"
     if (value) {
-      logInfo('getTestSequence#B', "value: ${value}")
       result = fromJson(value)
-      logInfo('getTestSequence#C', "result: ${result}")
     } else {
       logError('getTestSequence#D', 'Encountered null value at key')
     }
@@ -483,21 +479,21 @@ void initialize() {
     logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
     DevW pbsg = getOrCreatePBSG(pbsgName)
     logTrace('initialize',
-      "Subscribing ${b('pbsg_pushedHandler()')} to ${b('pushed')} events."
+      "Subscribing ${b('handle_pushed()')} to ${b('pushed')} events."
     )
-    subscribe(pbsg, 'pushed', pbsg_pushedHandler, ['filterEvents': true])
+    subscribe(pbsg, 'pushed', handle_pushed, ['filterEvents': true])
     logTrace('initialize',
-      "Subscribing ${b('pbsg_jsonPbsgHandler()')} to ${b('jsonPbsg')} events."
+      "Subscribing ${b('handle_jsonPbsg()')} to ${b('jsonPbsg')} events."
     )
-    subscribe(pbsg, 'jsonPbsg', pbsg_jsonPbsgHandler, ['filterEvents': true])
+    subscribe(pbsg, 'jsonPbsg', handle_jsonPbsg, ['filterEvents': true])
     logTrace('initialize',
-      "Subscribing ${b('pbsg_activeHandler()')} to ${b('active')} events."
+      "Subscribing ${b('handle_active()')} to ${b('active')} events."
     )
-    subscribe(pbsg, 'active', pbsg_activeHandler, ['filterEvents': true])
+    subscribe(pbsg, 'active', handle_active, ['filterEvents': true])
     logTrace('initialize',
-      "Subscribing ${b('pbsg_jsonLifoHandler()')} to ${b('jsonLifo')} events."
+      "Subscribing ${b('handle_jsonLifo()')} to ${b('jsonLifo')} events."
     )
-    subscribe(pbsg, 'jsonLifo', pbsg_jsonLifoHandler, ['filterEvents': true])
+    subscribe(pbsg, 'jsonLifo', handle_jsonLifo, ['filterEvents': true])
     configPbsgUsingParse(pbsg)
     // BUILD AND RUN ANY TEST SEQUENCES
     logInfo('initialize', 'Preparing to run custom test sequence.')
