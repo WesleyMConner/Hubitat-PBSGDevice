@@ -1,5 +1,10 @@
 = PushButton Switch Group (PGSG)
 
+IMPORTANT:: When PBSG leverages sendEvent(), the `descriptionText` field may
+include "fancy labels" from wesmc.lUtils. The relevant HTML can be removed using `String stripFancy(String html)`, which is also found in wesmc.lUtils.
+
+
+
 == What is a PBSG?
 
 A PBSG is a Hubitat-compatible virtual device where ...

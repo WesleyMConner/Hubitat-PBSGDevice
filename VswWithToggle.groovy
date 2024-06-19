@@ -12,9 +12,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 // implied.
 // ---------------------------------------------------------------------------------
-#include wesmc.lUtils
-import groovy.json.JsonOutput    // Appears in wesmc.lPBSG
-import groovy.json.JsonSlurper   // Appears in wesmc.lPBSG
+// The Groovy Linter generates NglParseError on Hubitat #include !!!
+#include wesmc.lUtils  // Requires the following imports.
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.InstalledAppWrapper as InstAppW
+import com.hubitat.hub.domain.Event as Event
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import java.lang.Math as Math
+import java.lang.Object as Object
 
 metadata {
   definition(
@@ -24,7 +31,6 @@ metadata {
     importUrl: 'PENDING',
     singleThreaded: 'false'
   ) {
-    capability "Configuration"   // Commands:  configure()
     capability "Switch"          // Attribtes:
                                  //   - switch: ['on'|'off']
                                  // Commands: on(), off()
@@ -46,50 +52,30 @@ metadata {
 // Lifecycle methods
 
 void installed() {
-  // Runs when driver is installed
-  //-> setLogLevel(settings.logLevel)
-  logTrace('installed', 'Entered')
+  // Called when a bare device is first constructed.
+  logTrace('installed#56', "this.device.class: ${this.device.class}")
+  logTrace('installed', 'Called, taking no action')
   settings?.logLevel && setLogLevel(settings.logLevel)
-  //-> logInfo('installed', ['',
-  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //-> ].join('<br/>'))
 }
 
-void configure() {
-  logTrace('configure', 'Entered')
-  // Runs due to presence of capability "Configuration"
-  settings?.logLevel && setLogLevel(settings.logLevel)
-  //-> setLogLevel(settings.logLevel)
-  //-> logInfo('configure', ['',
-  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //-> ].join('<br/>'))
+void uninstalled() {
+  // Called on device tear down.
+  logTrace('uninstalled', 'Called, taking no action')
+}
+
+void initialize() {
+  // Called on hub startup (per capability "Initialize").
+  logTrace('initialize', 'Called, taking no action')
 }
 
 void updated() {
   logTrace('updated', 'Entered')
   // Runs when save is clicked in the preferences section
   //-> setLogLevel(settings.logLevel)
-  //-> logInfo('updated', ['',
-  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //-> ].join('<br/>'))
-}
+  logInfo('updated', ['',
+    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
+  ].join('<br/>'))
 
-void uninstalled() {
-  logTrace('uninstalled', 'Entered')
-  // Runs on device tear down
-  //-> setLogLevel(settings.logLevel)
-  //-> logInfo('uninstalled', ['',
-  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //-> ].join('<br/>'))
-}
-
-void initialize() {
-  logTrace('initialize', 'Entered')
-  // Runs when called, typically by installed() and updated()
-  //-> setLogLevel(settings.logLevel)
-  //-> logInfo('initialize', ['',
-  //->   settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  //-> ].join('<br/>'))
 }
 
 // Methods Expected for Advertised Capabilities
@@ -102,13 +88,12 @@ void push() { parent?.vswWithTogglePush(this.device) }
 
 // Supported, State-Changing Actions
 
-Event parse(String action) {
+void parse(String action) {
   // The String version of parse IS NOT supported
   logWarn('parse', [
     'parse(String) is not implemented',
     "Ignored action: ${action}"
   ].join('<br/>'))
-  return null
 }
 
 void parse(ArrayList actions) {
@@ -120,11 +105,18 @@ void parse(ArrayList actions) {
   //                  unit: Omitted if boolean, '%', ...
   //       descriptionText: Human-friendly string
   //         isStateChange: true|false
-  logTrace('parse', "actions: ${actions}")
+  logTrace('parse', "actions: ${actions}, class: ${this.class}")
   actions.each{ action ->
+    // Some actions can be passed directly to sendEvent()
     if (action?.name in ['switch']) {
-      logInfo('parse', action.descriptionText)
+      logTrace('parse', action.descriptionText)
       sendEvent(action)
+    }
+    // A config change requires a custom implementation
+    else if (action?.name == 'logLevel') {
+      device.updateSetting(
+        'logLevel', [value: action.value, type: 'Enum']
+      )
     } else {
       logWarn('parse', "Ignored ${action}")
     }

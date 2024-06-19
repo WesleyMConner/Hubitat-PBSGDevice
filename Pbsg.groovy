@@ -12,12 +12,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 // implied.
 // ---------------------------------------------------------------------------------
-#include wesmc.lUtils
+// The Groovy Linter generates NglParseError on Hubitat #include !!!
+#include wesmc.lUtils  // Requires the following imports.
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
-import groovy.json.JsonOutput    // See wesmc.lUtils
-import groovy.json.JsonSlurper   // See wesmc.lUtils
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import java.lang.Math as Math
+import java.lang.Object as Object
 
 metadata {
   definition(
@@ -84,10 +88,12 @@ metadata {
       required: true
     )
     // IMPORTANT (as of Q2'24)
-    //   - Ideally, the Preference 'dflt' would be of type 'Enum'.
-    //   - Per Mike Maxwell, "Enum inputs in drivers are not dynamic" !!!
+    //   - Ideally, the Preference 'dflt' would be of type 'Enum' where
+    //     the values in the Enum are assembled dynamically.
+    //   - Per Mike Maxwell, "Enum inputs in drivers ARE NOT DYNAMIC" !!!
     //     https://community.hubitat.com/t/driver-commands-with-enum/2110/5
-    //   - Enum preferences DO NOT UPDATE CORRECTLY, via device.updateSetting()
+    //   - Enum preferences CANNOT BE UPDATED via device.updateSetting().
+    //   - Enums must be fixed (see logLevel below).
     //   - Neil Anderson suggests using a custom command instead.
     //     https://community.hubitat.com/t/driver-commands-with-enum/2110/11
     //   - Below, Preference 'dflt' is of type 'String' so that it operates
@@ -107,10 +113,10 @@ metadata {
     )
     input( name: 'logLevel',
       title: b('Logging Threshold ≥'),
-      type: 'Enum',
+      type: 'Enum',         // Here, the Enum is fixed (not dynamic), so "okay".
       multiple: false,
       options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
-      defaultValue: 'TRACE',
+      defaultValue: 'INFO',
       required: true
     )
   }
@@ -123,16 +129,17 @@ metadata {
 void installed() {
   // Called when a bare device is first constructed.
   // Note: Settings ARE NOT likely to meet sufficiency requirements.
-  logInfo('installed', 'Called, taking no action')
+  logTrace('installed', 'Called, taking no action')
 }
 
 void uninstalled() {
   // Called on device tear down.
-  logInfo('uninstalled', 'Called, taking no action')
+  logTrace('uninstalled', 'Called, taking no action')
 }
 
 void initialize() {
   // Called on hub startup (per capability "Initialize").
+  logTrace('initialize', 'Checking sufficiency of current settings')
   ifSufficientSettingsConfigure('initialize()')
 }
 
@@ -155,8 +162,11 @@ void configure() {
     && healthyInstTypePref(settings.instType)
     && healthyInstTypePref(settings.logLevel)
   ) {
-    logTrace('configure', 'Healthy Preferences/Settings, rebuilding PBSG.')
-    rebuiltPbsg()
+    logTrace(
+      'configure',
+      "Healthy preferences, Rebuilding PBSG ${device.getLabel()} (from scratch)."
+    )
+    rebuildPbsg()
   } else {
     logError('configure', 'Unhealthy Preferences/Settings, see Hubitat logs.')
   }
@@ -172,15 +182,7 @@ void updateButtonsTrio(ArrayList buttonsList) {
   //   - settings.buttons             // String
   //   - attribute 'numberOfButtons'  // Number
   atomicState.buttonsList = buttonsList
-  //logTrace(
-  //  'updateButtonsTrio',
-  //  "Updated atomicState.buttonsList: ${bList(atomicState.buttonsList)}"
-  //)
   device.updateSetting('buttons', [value: buttonsList.join(' '), type: 'String'])
-  //logTrace(
-  //  'updateButtonsTrio',
-  //  "Updated settings.buttons: ${b(settings.buttons)}"
-  //)
   if (buttonsList) {
     Integer curr_nOB = device.currentValue('numberOfButtons')
     Integer next_nOB = buttonsList.size()
@@ -194,10 +196,6 @@ void updateButtonsTrio(ArrayList buttonsList) {
         unit: '#',
         descriptionText: desc
       )
-      //logTrace(
-      //  'updateButtonsTrio',
-      //  "Published numberOfButtons: ${b(device.currentValue('numberOfButtons'))}"
-      //)
     }
   }
 }
@@ -217,7 +215,9 @@ Boolean healthyButtonsPref(String buttons) {
   } else if (buttonsList.size() < 2) {
     deficiency << "The button count, ${buttonsList} (${buttonsList.size()}) is < 2."
   } else {
-    //logTrace('healthyButtonsPref', 'Calling updateButtonsTrio')
+    logTrace(
+      'healthyButtonsPref',
+      'Updating button-related atomicState, settings and attributes.')
     updateButtonsTrio(buttonsList)
     result = true
   }
@@ -242,7 +242,7 @@ Boolean healthyDfltPref(String dflt) {
       }
     }
   } else {
-    // Parse expects an explicit 'not_applicable' (vs null) for clarity."
+    // Parse expects dflt == 'not_applicable' (vs null) for clarity."
     logError('healthyDfltPref', "found null dflt, expected 'not_applicable'")
   }
   return result
@@ -272,6 +272,10 @@ Boolean healthyLogLevelPref(String logLevel) {
   } else {
     device.updateSetting('logLevel', [value: logLevel, type: 'Enum'])
     result = true
+    // Cascase logLevel to VswWithToggle child devices
+    atomicState.buttonsList.each{ button ->
+      adjustVswLogLevel(button, logLevel)
+    }
   }
   return result
 }
@@ -305,16 +309,15 @@ void parse(String jsonConfig) {
   //       instType: <String>,     // Adjusts settings.instType
   //       logLevel: <Enum>        // Adjusts settings.logLevel
   //     ])
-  logTrace('parse', "Processing jsonConfig:<br/>${b(jsonConfig)}")
   Map parms = fromJson(jsonConfig)
-  logTrace('parse', "Produced parms: ${bMap(parms)}")
+  logTrace('parse', "Received parms: ${bMap(parms)} (as Json)")
   if (
     healthyButtonsPref(parms.buttons ?: settings.buttons)
     && healthyDfltPref(parms.dflt ?: settings.dflt)
     && healthyInstTypePref(parms.instType ?: settings.instType)
-    && healthyInstTypePref(parms.logLevel ?: settings.logLevel)
+    && healthyLogLevelPref(parms.logLevel ?: settings.logLevel)
   ) {
-    logTrace('parse', "Good parms, Calling reBuildPbsg()")
+    logTrace('parse', "Parms are healthy. Re-Building PBSG (from scratch).")
     reBuildPbsg()
   }
 }
@@ -331,26 +334,25 @@ void reBuildPbsg() {
   ArrayList expectedChildDnis = []
   ArrayList buttonsList = atomicState.buttonsList
   buttonsList.each { button ->
-//logInfo('configure#A', "button: ${button}, pbsg: ${pbsg_State(newEmptyPbsg)}")
-    DevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
+    ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
     expectedChildDnis << vsw.getDeviceNetworkId()
     newEmptyPbsg.lifo.push(button)
     if (vsw.switch == 'on') {
       // Move the button from the LIFO to active
       pbsg_ActivateButton(newEmptyPbsg, button)
-//logInfo('configure#B', "button: ${button}, pbsg: ${pbsg_State(newEmptyPbsg)}")
     }
   }
-  if (!newEmptyPbsg.active) { pbsg_EnforceDefault(newEmptyPbsg) }
-//logInfo('configure#C', "button: ${button}, pbsg: ${pbsg_State(newEmptyPbsg)}")
+  if (!newEmptyPbsg.active && settings.dflt && settings.dflt != 'not_applicable') {
+    pbsg_EnforceDefault(newEmptyPbsg)
+  }
   ArrayList currentChildDnis = getChildDevices().collect { d ->
     d.getDeviceNetworkId()
   }
   ciPbsg(newEmptyPbsg)  // Generate PBSG sendEvent(s) (aka commit).
   ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
-  logTrace('configure', 'Checking for orphaned child devices.')
-  orphanedDevices.each { orphan ->
-    logWarn('configure', "Removal of orphan device ${b(orphan)} is TBD")
+  orphanedDevices.each { dni ->
+    logWarn('reBuildPbsg', "Removing orphaned device ${b(dni)}.")
+    deleteChildDevice(dni)
   }
 }
 
@@ -368,7 +370,7 @@ Map newEmptyPbsg() {
     priorActive: null,     // By definition, "new" suggests no history.
     priorLifo: []          // By definition, "new" suggests no history.
   ]
-  logTrace('newEmptyPbsg', "returning: ${bMap(pbsg)}")
+  logTrace('newEmptyPbsg', "${bMap(pbsg)}")
   return pbsg
 }
 
@@ -401,13 +403,13 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
     pbsg.lifo.each{ button -> turnOffVsw(button) }
     pbsg.active && (pbsg.active != 'not_applicable') && turnOnVsw(pbsg.active)
     String jsonPbsg = toJson(pbsg_CoreKeysOnly(pbsg))
+    logTrace('ciPbsg', "Updating jsonPbsg: ${jsonPbsg}")
     device.sendEvent(
       name: 'jsonPbsg',
       isStateChange: true,
       value: jsonPbsg,
       descriptionText: pbsg_State(pbsg)
     )
-    logTrace('ciPbsg', "Updated PBSG: ${pbsg_State(pbsg)}")
   }
   if (activeChanged) {
     String activeDesc = "${i(pbsg.priorActive)} → ${b(pbsg.active)}"
@@ -421,7 +423,6 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
     Integer priorPushed = buttonNameToPushed(pbsg.priorActive)
     Integer pushed = buttonNameToPushed(pbsg.active)
     String pushedDesc = "${i(priorPushed)} → ${b(pushed)}"
-    //logTrace('ciPbsg', "Updating attribute 'active': ${b(pbsg.active)}")
     logTrace('ciPbsg', "Updating pushed: ${pushedDesc}")
     device.sendEvent(
       name: 'pushed',
@@ -445,7 +446,7 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
 Map pbsg_ActivateButton(Map pbsg, String button) {
   // Make 'button' active (if not already) in pbsg.
   if (pbsg?.active == button) {
-    logWarn(
+    logTrace(
       'pbsg_ActivateButton',
       "${b(button)} was already activated"
     )
@@ -466,11 +467,11 @@ Map pbsg_ActivateButton(Map pbsg, String button) {
 }
 
 Map pbsg_DeactivateButton(Map pbsg, String button) {
-  logTrace('pbsg_DeactivateButton', "target ${b(button)}")
+  logTrace('pbsg_DeactivateButton', "Deactivating ${b(button)}")
   if (pbsg.active != button) {
-    logWarn('pbsg_DeactivateButton', "Button (${button}) IS NOT active. ")
+    logInfo('pbsg_DeactivateButton', "Button (${button}) IS NOT active. ")
   } else if (pbsg.active == settings.dflt) {
-    logWarn(
+    logInfo(
       'pbsg_DeactivateButton',
       "Ignoring request to deactivate the dflt button ${b(settings.dflt)}"
     )
@@ -502,21 +503,15 @@ Map pbsg_ActivateLastActive(Map pbsg) {
   //   +----------------------+----------------------+
   Integer latestPushIndex = pbsg.lifo.size() - 1
   String button = pbsg.lifo[latestPushIndex]
-  logTrace('pbsg_ActivateLastActive', "activating ${b(button)}")
-  pbsg_ActivateButton(pbsg, lastActive)
+  logTrace('pbsg_ActivateLastActive', "Activating ${b(button)}")
+  pbsg_ActivateButton(pbsg, button)
   return pbsg
 }
 
 Map pbsg_EnforceDefault(Map pbsg) {
-  if (pbsg
-      && !pbsg.active
-      && settings.dflt
-      && settings.dflt != 'not_applicable') {
+  if (pbsg?.active == null && settings?.dflt && settings.dflt != 'not_applicable') {
+    logTrace('pbsg_EnforceDefault', "Activating ${b(settings.dflt)}")
     result = pbsg_ActivateButton(pbsg, settings.dflt)
-    logTrace(
-      'pbsg_EnforceDefault',
-      "${b(settings.dflt)} ⟹ ${bMap(pbsg)}"
-    )
   }
   return pbsg
 }
@@ -526,7 +521,7 @@ String buttonState(String button) {
   if (button != null) {
     String tag = (button == settings.dflt) ? '*' : ''
     result += "${tag}${b(button)} "
-    DevW d = getChildDevice("${device.getLabel()}_${button}")
+    ChildDevW d = getChildDevice("${device.getLabel()}_${button}")
     if (d) {
       switch(d.currentValue('switch')) {
         case 'on':
@@ -586,7 +581,7 @@ void deactivate(String button) {
 }
 
 void activateLastActive() {
-  logTrace('activateLastActive', 'no args')
+  logTrace('activateLastActive', i('This command requires no parameters.'))
   pbsg = coPbsg()
   pbsg_ActivateLastActive(pbsg)
   ciPbsg(pbsg)
@@ -607,19 +602,21 @@ void testVswPush(String button) {
   getVsw(button).push()
 }
 
-
 ////
 //// STATE METHODS
 ////
 
-DevW getOrCreateVswWithToggle(String pbsgName, String button) {
+ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
   // Device Network Identifier (DNI) does not include white space.
   // Device Names / Labels limit special characters to '_'.
   String dni = "${pbsgName}_${button}"
   String name = dni.replaceAll('_', ' ')
-  DevW d = getChildDevice(dni)
+  ChildDevW d = getChildDevice(dni)
   if (!d) {
-    logWarn('getOrCreateVswWithToggle', "Creating VswWithToggle ${b(dni)}")
+    logWarn(
+      'getOrCreateVswWithToggle',
+      "Creating VswWithToggle instance: ${b(dni)}"
+    )
     d = addChildDevice(
       'wesmc',               // namespace
       'VswWithToggle',       // typeName
@@ -635,6 +632,9 @@ DevW getOrCreateVswWithToggle(String pbsgName, String button) {
 }
 
 //// PROCESS METHODS ON BEHALF OF CHILD DEVICES
+////   - A wmc.VswWithTogge is of class com.hubitat.app.DeviceWrapper (DevW)
+////     when it calls parent.*() - essentially forwarding the request to
+////     one of the following four methods.
 
 String vswToButtonName(DevW d) {
   return d.getDeviceNetworkId().tokenize('_')[1]
@@ -659,26 +659,26 @@ void vswWithTogglePush(DevW d) {
 
 // Direct Child State Changes
 //   - Using getChildDevice vs. maintaining an (overweight)
-//     button-to-DevW Map (which is problematic in atomicState)
+//     button-to-ChildDevW Map (which is problematic in atomicState)
 
-DevW getVsw(String button) {
+ChildDevW getVsw(String button) {
   String dni = "${device.getLabel()}_${button}"
-  DevW d = getChildDevice(dni)
+  ChildDevW d = getChildDevice(dni)
   if (!d) {
-    logError('getVsw', "No Device (${b(dni)}) for button (${b(button)}).")
+    logError('getVsw', "No Device (${devHued(d)}) for button (${b(button)}).")
   }
   return d
 }
 
 void turnOnVsw(String button) {
-  logTrace('turnOnVsw', "button: ${b(button)}")
-  DevW d = getVsw(button)
+  ChildDevW d = getVsw(button)
+  logTrace('turnOnVsw', d.getDeviceNetworkId())
   if (d) {
     // Parse expects a list (ArrayList) of commands (Maps)
     ArrayList commands = [] << [
       name: 'switch',
       value: 'on',
-      descriptionText: "${b(d.getDeviceNetworkId())} was turned on",
+      descriptionText: "Turned on ${devHued(d)}",
       isStateChange: true
     ]
     d.parse(commands)
@@ -687,14 +687,14 @@ void turnOnVsw(String button) {
 
 void turnOffVsw(String button) {
   if (button) {
-    logTrace('turnOffVsw', "button: ${b(button)}")
-    DevW d = getVsw(button)
+    ChildDevW d = getVsw(button)
+    logTrace('turnOffVsw', devHued(d))
     if (d) {
       // Parse expects a list (ArrayList) of commands (Maps)
       ArrayList commands = [] << [
         name: 'switch',
         value: 'off',
-        descriptionText: "${b(d.getDeviceNetworkId())} was turned off",
+        descriptionText: "Turned off ${devHued(d)}",
         isStateChange: true
       ]
       d.parse(commands)
@@ -704,7 +704,18 @@ void turnOffVsw(String button) {
   }
 }
 
-// Methods Expected for Advertised Capabilities
+void adjustVswLogLevel(String button, String logLevel) {
+  ChildDevW d = getVsw(button)
+  logTrace(
+    'adjustVswLogLevel',
+    "${devHued(d)} setting logLevel to ${logLevel}"
+  )
+  if (d) {
+    // Parse expects a list (ArrayList) of commands (Maps)
+    ArrayList commands = [] << [ name: 'logLevel', value: logLevel ]
+    d.parse(commands)
+  }
+}
 
 void push(Integer buttonNumber) {
   ArrayList buttonsList = atomicState?.buttons

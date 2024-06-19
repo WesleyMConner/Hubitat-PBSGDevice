@@ -12,17 +12,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 // implied.
 // ---------------------------------------------------------------------------------
-// For reference:
-//   Unicode 2190 ← LEFTWARDS ARROW
-//   Unicode 2192 → RIGHTWARDS ARROW
+// The Groovy Linter generates NglParseError on Hubitat #include !!!
+#include wesmc.lUtils  // Requires the following imports.
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
-import groovy.json.JsonOutput    // See wesmc.lUtils
-import groovy.json.JsonSlurper   // See wesmc.lUtils
-
-// The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import java.lang.Math as Math
+import java.lang.Object as Object
 
 definition (
   name: 'Demo-PBSG',
@@ -59,6 +58,8 @@ void handle_pushed(Event e) {
     logInfo('handle_pushed',
       "Received '${e.name}': ${b(val)} from ${eSender(e)}"
     )
+logInfo('handle_pushed#A', e.description)
+logInfo('handle_pushed#B', stripFancy(e.description))
   } else {
     logError('handle_pushed', "Unexpected event: ${eventDetails(e)}")
   }
@@ -311,7 +312,7 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   solicitTestSequence(testSequenceJson, pbsgName)
 }
 
-void configPbsgUsingParse(DevW pbsg) {
+void configPbsgUsingParse(ChildDevW pbsg) {
   // Per 'pbsg.groovy', there are two facilities for configuring a PBSG:
   //   (1) MANUALLY: Using the Hubitat GUI's device drilldown page.
   //   (2) PROGRAMMATICALLY: Using the PBSG's parse(String json) method.
@@ -325,13 +326,10 @@ void configPbsgUsingParse(DevW pbsg) {
       buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
       dflt: defaultButton(prefix),
       instType: 'pbsg',
-      logLevel: 'INFO'
+      logLevel: 'TRACE'  // This overrides PBSG default of 'INFO'
     ]
     String jsonPrefs = toJson(prefs)
-    logTrace('configPbsgUsingParse', ['',
-      "Calling pbsg ${b(pbsgName)} parse() with:",
-      "${b(jsonPrefs)}"
-    ].join('<br/>'))
+    logTrace('configPbsgUsingParse', "Calling ${devHued(pbsg)}.parse(${b(jsonPrefs)})")
     pbsg.parse(jsonPrefs)
   } else {
     logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
@@ -434,14 +432,15 @@ void updated() {
 void uninstalled() {
 }
 
-DevW getOrCreatePBSG(String pbsgName) {
+ChildDevW getOrCreatePBSG(String pbsgName) {
   String dni = pbsgName   // Should NOT contain special chars except for '_'
   String name = dni.replaceAll('_', ' ') // Delim ' ' avoids special chars
   // Device Network Identifiers DO NOT include white space.
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
-  DevW d = getChildDevice(dni)
-  if (!d) {
-    logWarn('getOrCreatePBSG', "Creating PBSG ${b(dni)}")
+  ChildDevW d = getChildDevice(dni)
+  if (d) {
+    logTrace('getOrCreatePBSG', "Using existing ${devHued(d)}")
+  } else {
     d = addChildDevice(
       'wesmc',   // namespace
       'PBSG',    // typeName
@@ -452,9 +451,20 @@ DevW getOrCreatePBSG(String pbsgName) {
         label: name          // "PBSG <pbsgName>"
       ]
     )
+    logTrace('getOrCreatePBSG', "Created new ${devHued(d)}")
   }
   return d
 }
+
+void subscribeHandler(ChildDevW issuer, String attribute) {
+  String hdlr = "handle_${attribute}"
+  logTrace(
+    'subscribeHandler',
+    "Subscribing ${b(hdlr)} to ${devHued(issuer)} ${b(attribute)} events."
+  )
+  subscribe(issuer, attribute, handler, ['filterEvents': true])
+}
+
 
 void initialize() {
   setLogLevel('TRACE')  // Use 'INFO' to reduce logging.
@@ -477,37 +487,26 @@ void initialize() {
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
     logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
-    DevW pbsg = getOrCreatePBSG(pbsgName)
-    logTrace('initialize',
-      "Subscribing ${b('handle_pushed()')} to ${b('pushed')} events."
-    )
-    subscribe(pbsg, 'pushed', handle_pushed, ['filterEvents': true])
-    logTrace('initialize',
-      "Subscribing ${b('handle_jsonPbsg()')} to ${b('jsonPbsg')} events."
-    )
-    subscribe(pbsg, 'jsonPbsg', handle_jsonPbsg, ['filterEvents': true])
-    logTrace('initialize',
-      "Subscribing ${b('handle_active()')} to ${b('active')} events."
-    )
-    subscribe(pbsg, 'active', handle_active, ['filterEvents': true])
-    logTrace('initialize',
-      "Subscribing ${b('handle_jsonLifo()')} to ${b('jsonLifo')} events."
-    )
-    subscribe(pbsg, 'jsonLifo', handle_jsonLifo, ['filterEvents': true])
+    ChildDevW pbsg = getOrCreatePBSG(pbsgName)
+    subscribeHandler(pbsg, 'pushed')
+    subscribeHandler(pbsg, 'jsonPbsg')
+    subscribeHandler(pbsg, 'active')
+    subscribeHandler(pbsg, 'jsonLifo')
+    // Assemble solicited configure data (for the current PBSG) and use it to
+    // configure the current PBSG via 'pbsg.parse(String json)'.
     configPbsgUsingParse(pbsg)
-    // BUILD AND RUN ANY TEST SEQUENCES
-    logInfo('initialize', 'Preparing to run custom test sequence.')
+    // Build and run the solicited Test Sequences.
     ArrayList testSeqList = getTestSequence(pbsgName)
-logInfo('initialize', "testSeqList: ${testSeqList}")
+    logInfo(
+      'initialize',
+      "Test Sequence for ${b(pbsgName)}, ${bList(testSeqList)}")
     Integer actionCnt = testSeqList.size()
-logInfo('initialize', "actionCnt: ${actionCnt}")
+    // Call the appropriate PBSG method per Test Action.
     testSeqList?.eachWithIndex{ testAction, index ->
-logInfo('initialize', "testAction: ${testAction}, index: ${index}")
-      String actionLabel = "Action ${index + 1} of ${actionCnt}:"
-      logInfo('initialize', "${actionLabel} ${b(testAction)}")
-      if (testAction == 'Activate_last_active') {
-        pbsg.activateLastActive()
-      } else {
+      String actionLabel = "Action ${index + 1} of ${actionCnt} for ${devHued(pbsg)}:"
+      logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
+      if (testAction == 'Activate_last_active') { pbsg.activateLastActive() }
+      else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
@@ -543,13 +542,9 @@ logInfo('initialize', "testAction: ${testAction}, index: ${index}")
     }
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
-  /*
   ArrayList childDNIs = getChildDevices().collect{d -> d.getDeviceNetworkId()}
   ArrayList expectedDNIs = []
-  pbsgNames.each { pbsgName ->
-    Map pbsg = getPbsgState(pbsgName)
-    pbsg.all.each{ button -> expectedDNIs << "${pbsgName}_${button}" }
-  }
+  pbsgNames.each { pbsgName -> expectedDNIs.add(pbsgName) }
   ArrayList orphanedDNIs = childDNIs.minus(expectedDNIs)
   logInfo('initialize', ['',
     "   ${b('childDNIs')}: ${childDNIs}",
@@ -560,5 +555,4 @@ logInfo('initialize', "testAction: ${testAction}, index: ${index}")
     logWarn('initialize', "Deleting orphaned device w/ DNI: ${b(dni)}")
     deleteChildDevice(dni)
   }
-  */
 }
