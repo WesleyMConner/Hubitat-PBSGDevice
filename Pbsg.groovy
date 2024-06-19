@@ -99,7 +99,10 @@ metadata {
     //   - Below, Preference 'dflt' is of type 'String' so that it operates
     //     symmetrically alongside other Preferences - e.g., see parms().
     input( name: 'dflt',
-      title: "${b('Default Button')} (must be present in 'buttons' or 'not_applicable')",
+      title: [
+        b('Default Button'),
+        i('(must be present in "buttons" or "not_applicable")')
+      ].join('<br/>'),
       type: 'String',
       multiple: false,
       defaultValue: 'not_applicable',
@@ -164,7 +167,7 @@ void configure() {
   ) {
     logTrace(
       'configure',
-      "Healthy preferences, Rebuilding PBSG ${device.getLabel()} (from scratch)."
+      'Preferences are healthy, rebuilding PBSG (from scratch).'
     )
     rebuildPbsg()
   } else {
@@ -187,8 +190,11 @@ void updateButtonsTrio(ArrayList buttonsList) {
     Integer curr_nOB = device.currentValue('numberOfButtons')
     Integer next_nOB = buttonsList.size()
     if (curr_nOB != next_nOB) {
-      String desc = "numberOfButtons: ${i(curr_nOB)} → ${b(next_nOB)}"
-      //logTrace('updateButtonsTrio', desc)
+      String desc = "${i(curr_nOB)} → ${b(next_nOB)}"
+      logTrace(
+        'updateButtonsTrio',
+        "Updating attribute ${b('numberOfButtons')}: ${desc}"
+      )
       device.sendEvent(
         name: 'numberOfButtons',
         isStateChange: true,
@@ -266,9 +272,12 @@ Boolean healthyInstTypePref(String instType) {
 
 Boolean healthyLogLevelPref(String logLevel) {
   result = false
-  ArrayList ok = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
-  if (!ok.contains(logLevel)) {
-    logError('healthyLogLevelPref', "logLevel (${b(logLevel)}) not in (${b(ok)}).")
+  ArrayList options = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
+  if (!options.contains(logLevel)) {
+    logError(
+      'healthyLogLevelPref',
+      "logLevel (${b(logLevel)}) not in ${bList(options)}."
+    )
   } else {
     device.updateSetting('logLevel', [value: logLevel, type: 'Enum'])
     result = true
@@ -310,7 +319,7 @@ void parse(String jsonConfig) {
   //       logLevel: <Enum>        // Adjusts settings.logLevel
   //     ])
   Map parms = fromJson(jsonConfig)
-  logTrace('parse', "Received parms: ${bMap(parms)} (as Json)")
+  logTrace('parse', "Received parms: ${bMap(parms)} (from Json)")
   if (
     healthyButtonsPref(parms.buttons ?: settings.buttons)
     && healthyDfltPref(parms.dflt ?: settings.dflt)
@@ -318,7 +327,7 @@ void parse(String jsonConfig) {
     && healthyLogLevelPref(parms.logLevel ?: settings.logLevel)
   ) {
     logTrace('parse', "Parms are healthy. Re-Building PBSG (from scratch).")
-    reBuildPbsg()
+    rebuildPbsg()
   }
 }
 
@@ -329,29 +338,34 @@ String currentSettingsHtml() {
   ].join('<br/>')
 }
 
-void reBuildPbsg() {
-  Map newEmptyPbsg = newEmptyPbsg()
+void rebuildPbsg() {
+  Map pbsg = newEmptyPbsg()
   ArrayList expectedChildDnis = []
   ArrayList buttonsList = atomicState.buttonsList
   buttonsList.each { button ->
     ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
     expectedChildDnis << vsw.getDeviceNetworkId()
-    newEmptyPbsg.lifo.push(button)
+    pbsg.lifo.push(button)
     if (vsw.switch == 'on') {
       // Move the button from the LIFO to active
-      pbsg_ActivateButton(newEmptyPbsg, button)
+      pbsg_ActivateButton(pbsg, button)
     }
+    logTrace('rebuildPbsg', pbsg_State(pbsg))
   }
-  if (!newEmptyPbsg.active && settings.dflt && settings.dflt != 'not_applicable') {
-    pbsg_EnforceDefault(newEmptyPbsg)
+  if (!pbsg.active && settings.dflt && settings.dflt != 'not_applicable') {
+    pbsg_EnforceDefault(pbsg)
   }
   ArrayList currentChildDnis = getChildDevices().collect { d ->
     d.getDeviceNetworkId()
   }
-  ciPbsg(newEmptyPbsg)  // Generate PBSG sendEvent(s) (aka commit).
+  logInfo('rebuildPbsg', ['Synchronizing child devices and sending events.',
+    b('Waiting 100ms for logging and event callbacks')
+  ].join('<br/>'))
+  pauseExecution(100)
+  ciPbsg(pbsg)  // Generate PBSG sendEvent(s) (aka commit).
   ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
   orphanedDevices.each { dni ->
-    logWarn('reBuildPbsg', "Removing orphaned device ${b(dni)}.")
+    logWarn('rebuildPbsg', "Removing orphaned device ${b(dni)}.")
     deleteChildDevice(dni)
   }
 }
@@ -370,7 +384,7 @@ Map newEmptyPbsg() {
     priorActive: null,     // By definition, "new" suggests no history.
     priorLifo: []          // By definition, "new" suggests no history.
   ]
-  logTrace('newEmptyPbsg', "${bMap(pbsg)}")
+  logTrace('newEmptyPbsg', bMap(pbsg))
   return pbsg
 }
 
@@ -403,7 +417,7 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
     pbsg.lifo.each{ button -> turnOffVsw(button) }
     pbsg.active && (pbsg.active != 'not_applicable') && turnOnVsw(pbsg.active)
     String jsonPbsg = toJson(pbsg_CoreKeysOnly(pbsg))
-    logTrace('ciPbsg', "Updating jsonPbsg: ${jsonPbsg}")
+    logTrace('ciPbsg', "Updating attribute ${b('jsonPbsg')}: ${jsonPbsg}")
     device.sendEvent(
       name: 'jsonPbsg',
       isStateChange: true,
@@ -413,7 +427,7 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
   }
   if (activeChanged) {
     String activeDesc = "${i(pbsg.priorActive)} → ${b(pbsg.active)}"
-    logTrace('ciPbsg', "Updating active: ${activeDesc}")
+    logTrace('ciPbsg', "Updating attribute ${b('active')}: ${activeDesc}")
     device.sendEvent(
       name: 'active',
       isStateChange: true,
@@ -423,7 +437,7 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
     Integer priorPushed = buttonNameToPushed(pbsg.priorActive)
     Integer pushed = buttonNameToPushed(pbsg.active)
     String pushedDesc = "${i(priorPushed)} → ${b(pushed)}"
-    logTrace('ciPbsg', "Updating pushed: ${pushedDesc}")
+    logTrace('ciPbsg', "Updating attribute ${b('pushed')}: ${pushedDesc}")
     device.sendEvent(
       name: 'pushed',
       isStateChange: true,
@@ -433,7 +447,7 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
   }
   if (lifoChanged) {
     String desc = "${i(pbsg.priorLifo)} → ${b(pbsg.lifo)}"
-    logTrace('ciPbsg', "Updating lifo: ${desc}")
+    logTrace('ciPbsg', "Updating attribute ${b('lifo')}: ${desc}")
     device.sendEvent(
       name: 'jsonLifo',
       isStateChange: true,
@@ -461,7 +475,7 @@ Map pbsg_ActivateButton(Map pbsg, String button) {
     // Remove target button from lifo and make it active.
     pbsg.lifo.removeAll([button])
     pbsg.active = button
-    logTrace('pbsg_ActivateButton', "${b(button)} ⟹ ${bMap(pbsg)}")
+    logTrace('pbsg_ActivateButton', "${b(button)} ⟹ ${pbsg_State(pbsg)}")
   }
   return pbsg
 }
@@ -484,7 +498,7 @@ Map pbsg_DeactivateButton(Map pbsg, String button) {
       pbsg.lifo.removeAll([settings.dflt])
       pbsg.active = settings.dflt
     }
-    logTrace('pbsg_DeactivateButton', "${b(button)} ⟹ ${bMap(pbsg)}")
+    logTrace('pbsg_DeactivateButton', "${b(button)} ⟹ ${pbsg_State(pbsg)}")
   }
   return pbsg
 }
@@ -546,19 +560,23 @@ String pbsg_State(Map pbsg) {
   // IMPORTANT:
   //   LIFO push() and pop() are supported, *BUT* pushed items are appended
   //   (not prepended). See "reverse()" below, which compensates.
-  ArrayList result = []
+  String result
   if (pbsg) {
-    result << "${b(device.getLabel())}: "
-    if (pbsg.active) { result << buttonState(pbsg.active) }
-    else { result << i('null') }
-    result << '← ['
-    result << pbsg.lifo?.reverse()
-                  .collect { button -> buttonState(button) }.join(', ')
-    result << ']'
+    ArrayList table = []
+    table << '<span style="display:inline-table;">'
+    table << '<table><tr>'
+    table << "<td>${devHued(device)}:&nbsp;</td>"
+    table << tdBordered( pbsg.active ? buttonState(pbsg.active) : 'null' )
+    table << '<td>&nbsp;←&nbsp;</td>'
+    pbsg.lifo?.reverse().each { button ->
+      table << tdBordered( buttonState(button) )
+    }
+    table << '</tr></table></span>'
+    result = table.join()
   } else {
-    logError('pbsg_State', 'Received null PBSG parameter.')
+    result = "${devHued(device)}: null"
   }
-  return result.join()
+  return result
 }
 
 //// CLIENT-EXPOSED COMMANDS
@@ -678,7 +696,7 @@ void turnOnVsw(String button) {
     ArrayList commands = [] << [
       name: 'switch',
       value: 'on',
-      descriptionText: "Turned on ${devHued(d)}",
+      descriptionText: "Turned ${b('on')} ${devHued(d)}",
       isStateChange: true
     ]
     d.parse(commands)
@@ -694,7 +712,7 @@ void turnOffVsw(String button) {
       ArrayList commands = [] << [
         name: 'switch',
         value: 'off',
-        descriptionText: "Turned off ${devHued(d)}",
+        descriptionText: "Turned ${b('off')} ${devHued(d)}",
         isStateChange: true
       ]
       d.parse(commands)

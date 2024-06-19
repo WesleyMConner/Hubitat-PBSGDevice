@@ -33,19 +33,13 @@ definition (
   iconX2Url: ''
 )
 
-////
 //// GENERAL-PURPOSE EVENT HANDLER
-////
-
-String eSender(Event e) {
-  return "${b(e.displayName)} (${i(e.deviceId)})"
-}
 
 void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
     logInfo('handle_numberOfButtons',
-      "Received '${e.name}': ${b(val)} from ${eSender(e)}"
+      "${e.name} = ${b(val)} per ${eventSender(e)}"
     )
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
@@ -56,10 +50,8 @@ void handle_pushed(Event e) {
   if (e.name == 'pushed') {
     Integer val = e.value.toInteger()
     logInfo('handle_pushed',
-      "Received '${e.name}': ${b(val)} from ${eSender(e)}"
+      "${e.name} = ${b(e.value)} per ${eventSender(e)}"
     )
-logInfo('handle_pushed#A', e.description)
-logInfo('handle_pushed#B', stripFancy(e.description))
   } else {
     logError('handle_pushed', "Unexpected event: ${eventDetails(e)}")
   }
@@ -69,7 +61,7 @@ void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     Map pbsg = fromJson(e.value)
     logInfo('handle_jsonPbsg',
-      "Received 'PBSG' (decoded): ${bMap(pbsg)} from ${eSender(e)}"
+      "pbsg = ${bMap(pbsg)} (decoded json) per ${eventSender(e)}"
     )
   } else {
     logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
@@ -79,7 +71,7 @@ void handle_jsonPbsg(Event e) {
 void handle_active(Event e) {
   if (e.name == 'active') {
     logInfo('handle_active',
-      "Received '${e.name}': ${b(e.value)} from ${eSender(e)}"
+      "${e.name} = ${b(e.value)} per ${eventSender(e)}"
     )
   } else {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
@@ -90,16 +82,14 @@ void handle_jsonLifo(Event e) {
   if (e.name == 'jsonLifo') {
     ArrayList lifo = fromJson(e.value)
     logInfo('handle_jsonLifo',
-      "received LIFO (decoded): ${bList(lifo)} from ${eSender(e)}"
+      "lifo = ${bList(lifo)} (decoded json) per ${eventSender(e)}"
     )
   } else {
     logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
   }
 }
 
-////
 //// SOLICIT DATA FOR ONE OR MORE PBSG INSTANCES
-////
 
 Boolean isDynamic() {
   return (device?.getName()) ? false : true
@@ -134,7 +124,7 @@ void solicitButtonNames(String prefix) {
   if (prefix) { header << "for ${prefix}" }
   input(
     name: "${prefix}buttons",
-    title: "${h3(header)}",
+    title: h3(header),
     type: 'text',
     required: true,
     submitOnChange: dynamic
@@ -155,7 +145,7 @@ void solicitDefaultButton(String prefix) {
   if (prefix) { header << "for ${prefix}" }
   input(
     name: "${prefix}dflt",
-    title: "${h3(header)}",
+    title: h3(header),
     type: 'enum',
     multiple: false,
     options: [*getButtonNames(prefix), 'not_applicable'],
@@ -178,13 +168,13 @@ void solicitPbsgConfig(String pbsgName) {
   //   - All exposed fields can be edited until data entry is "Done".
   paragraph(h1("Provide '${b(pbsgName)}' Configuration Data"))
   ArrayList buttonList = getButtonNames("${pbsgName}_")
-  Integer buttonCount = buttonList?.size()
+  Integer buttonCnt = buttonList?.size()
   // Provide feedback to the client (dynamically).
   ArrayList feedback = []
-  switch (buttonCount) {
+  switch (buttonCnt) {
     case 1:
       feedback << h1('Oops only one button was detected')
-      feedback << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCount}"
+      feedback << "${b('Buttons')}: ${buttonList}, ${b('Button Count')}: ${buttonCnt}"
       // Deliberately fall through to the next case!
     case null:
       feedback << h2("Create at least two buttons for PBSG ${b(pbsgName)}")
@@ -196,21 +186,19 @@ void solicitPbsgConfig(String pbsgName) {
   }
   paragraph(h2(feedback.join('<br/>')))
   solicitButtonNames("${pbsgName}_")
-  if (buttonCount > 2) {
+  if (buttonCnt > 2) {
     solicitDefaultButton("${pbsgName}_")
   }
 }
 
-////
 //// SOLICIT PBSG ACTIONS AND BUILD AD HOC PBSG TEST SEQUENCES
-////
 
 void solicitNextAction(String pbsgName) {
   String header = 'Add a Test Action'
   if (pbsgName) { header << "for ${pbsgName}" }
   input(
     name: "${pbsgName}_nextAction",
-    title: "${h3(header)}",
+    title: h3(header),
     type: 'enum',
     options: getTestActions(pbsgName),
     required: false,
@@ -234,7 +222,7 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
   if (prefix) { header << "for ${pbsgName}" }
   input(
     name: "${pbsgName}_testSequence",
-    title: "${h3(header)}",
+    title: h3(header),
     type: 'textarea',
     defaultValue: testSequenceJson,
     required: true,
@@ -265,9 +253,7 @@ ArrayList getTestSequence(String pbsgName) {
   return result
 }
 
-////
 //// SUPPORT FOR AD HOC PBSG TESTING
-////
 
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
@@ -289,23 +275,13 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   ArrayList testSeqList = getTestSequence(pbsgName) ?: []
   // Add the most recent 'next action' to the 'test sequence'.
   String nextAction = getNextAction(pbsgName)
-  //logInfo('buildTestSequence#A', ['',
-  //  "pbsgName: ${pbsgName}",
-  //  "nextAction: ${nextAction}",
-  //  "testSeqList: ${testSeqList}"
-  //].join('<br/>'))
   if (nextAction) {
     testSeqList.add(nextAction)  // Add the latest item to the ArrayList
-    //logInfo('buildTestSequence#B', ['',
-    //  "pbsgName: ${pbsgName}",
-    //  "testSeqList: ${testSeqList}"
-    //].join('<br/>'))
     removeNextAction(pbsgName)     // Force fresh data soliciation
     removeTestSequence(pbsgName)   // Force fresh data soliciation
   }
   // Update the JSON version of the ArrayList
   String testSequenceJson = toJson(testSeqList)
-  //??needed?? settings."${pbsgName}_testSequenceJson" = testSequenceJson
   // Solicit a new Next Action
   solicitNextAction(pbsgName)
   // Present the latest Test Squence Json (for settings preservation)
@@ -329,16 +305,19 @@ void configPbsgUsingParse(ChildDevW pbsg) {
       logLevel: 'TRACE'  // This overrides PBSG default of 'INFO'
     ]
     String jsonPrefs = toJson(prefs)
-    logTrace('configPbsgUsingParse', "Calling ${devHued(pbsg)}.parse(${b(jsonPrefs)})")
+    logWarn('configPbsgUsingParse', ["Calling ${devHued(pbsg)}.parse(...)",
+      "Current parameter ${b("logLevel: 'TRACE'")} provides copious logging",
+      "Once flows are understood, ${b("logLevel: 'INFO'")} reduces logging",
+      "prefs: ${bMap(prefs)}",
+      "jsonPrefs: ${jsonPrefs}"
+    ].join('<br/>'))
     pbsg.parse(jsonPrefs)
   } else {
     logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
   }
 }
 
-////
 //// DEFINE THREE DEMO DATA COLLECTION PAGES
-////
 
 preferences {
   page(name: 'page1_CreatePBSGs', nextPage: 'page2_TestActions')
@@ -355,7 +334,6 @@ Map page1_CreatePBSGs() {
     section {
       solicitPbsgNames()
       ArrayList pbsgNames = getPbsgNames()
-      //->logInfo('page1_CreatePGSGs', "pbsgNames: ${pbsgNames}")
       pbsgNames.each{ pbsgName -> solicitPbsgConfig(pbsgName) }
     }
   }
@@ -413,7 +391,7 @@ Map page3_TestSequences() {
         buildTestSequence(pbsgName, testActions)
       }
       paragraph(
-        "Once 'Done' is pressed, the Test Sequence results should appear in the log."
+        "Test results appear in the Hubitat log after ${b('Done')} is pressed."
       )
     }
   }
@@ -462,9 +440,8 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
     'subscribeHandler',
     "Subscribing ${b(hdlr)} to ${devHued(issuer)} ${b(attribute)} events."
   )
-  subscribe(issuer, attribute, handler, ['filterEvents': true])
+  subscribe(issuer, attribute, hdlr, ['filterEvents': true])
 }
-
 
 void initialize() {
   setLogLevel('TRACE')  // Use 'INFO' to reduce logging.
@@ -497,16 +474,21 @@ void initialize() {
     configPbsgUsingParse(pbsg)
     // Build and run the solicited Test Sequences.
     ArrayList testSeqList = getTestSequence(pbsgName)
-    logInfo(
+    logTrace(
       'initialize',
       "Test Sequence for ${b(pbsgName)}, ${bList(testSeqList)}")
     Integer actionCnt = testSeqList.size()
     // Call the appropriate PBSG method per Test Action.
+    Integer waitMs = 100
     testSeqList?.eachWithIndex{ testAction, index ->
       String actionLabel = "Action ${index + 1} of ${actionCnt} for ${devHued(pbsg)}:"
-      logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
-      if (testAction == 'Activate_last_active') { pbsg.activateLastActive() }
-      else {
+      logInfo('initialize', ["${i(actionLabel)}: ${b(testAction)}",
+        b("Waiting ${waitMs} ms for logging and event callbacks")
+      ].join('<br/>'))
+      if (testAction == 'Activate_last_active') {
+        pbsg.activateLastActive()
+        pauseExecution(waitMs)
+      } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
@@ -514,18 +496,23 @@ void initialize() {
           switch (action) {
             case 'ButtonOn':
               pbsg.activate(target)
+              pauseExecution(waitMs)
               break
             case 'ButtonOff':
               pbsg.deactivate(target)
+              pauseExecution(waitMs)
               break
             case 'VswOn':
               pbsg.testVswOn(target)
+              pauseExecution(waitMs)
               break
             case 'VswOff':
               pbsg.testVswOff(target)
+              pauseExecution(waitMs)
               break
             case 'VswPush':
               pbsg.testVswPush(target)
+              pauseExecution(waitMs)
               break
             default:
               logError('initialize', [
@@ -546,7 +533,7 @@ void initialize() {
   ArrayList expectedDNIs = []
   pbsgNames.each { pbsgName -> expectedDNIs.add(pbsgName) }
   ArrayList orphanedDNIs = childDNIs.minus(expectedDNIs)
-  logInfo('initialize', ['',
+  logTrace('initialize', ['',
     "   ${b('childDNIs')}: ${childDNIs}",
     "${b('expectedDNIs')}: ${expectedDNIs}",
     "${b('orphanedDNIs')}: ${orphanedDNIs}"

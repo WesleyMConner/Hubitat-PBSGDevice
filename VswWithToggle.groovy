@@ -75,7 +75,6 @@ void updated() {
   logInfo('updated', ['',
     settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
   ].join('<br/>'))
-
 }
 
 // Methods Expected for Advertised Capabilities
@@ -105,7 +104,7 @@ void parse(ArrayList actions) {
   //                  unit: Omitted if boolean, '%', ...
   //       descriptionText: Human-friendly string
   //         isStateChange: true|false
-  logTrace('parse', "actions: ${actions}, class: ${this.class}")
+  logTrace('parse', "actions: ${actions}")
   actions.each{ action ->
     // Some actions can be passed directly to sendEvent()
     if (action?.name in ['switch']) {
