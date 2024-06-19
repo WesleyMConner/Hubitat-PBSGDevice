@@ -39,7 +39,7 @@ void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
     logInfo('handle_numberOfButtons',
-      "${e.name} = ${b(val)} per ${eventSender(e)}"
+      "${e.name} = ${b(val)} (${e.descriptionText}) per ${eventSender(e)}"
     )
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
@@ -50,7 +50,7 @@ void handle_pushed(Event e) {
   if (e.name == 'pushed') {
     Integer val = e.value.toInteger()
     logInfo('handle_pushed',
-      "${e.name} = ${b(e.value)} per ${eventSender(e)}"
+      "${e.name} = ${b(e.value)} (${e.descriptionText}) per ${eventSender(e)}"
     )
   } else {
     logError('handle_pushed', "Unexpected event: ${eventDetails(e)}")
@@ -61,7 +61,7 @@ void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     Map pbsg = fromJson(e.value)
     logInfo('handle_jsonPbsg',
-      "pbsg = ${bMap(pbsg)} (decoded json) per ${eventSender(e)}"
+      "pbsg = ${bMap(pbsg)} (${e.descriptionText}) per ${eventSender(e)}"
     )
   } else {
     logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
@@ -71,7 +71,7 @@ void handle_jsonPbsg(Event e) {
 void handle_active(Event e) {
   if (e.name == 'active') {
     logInfo('handle_active',
-      "${e.name} = ${b(e.value)} per ${eventSender(e)}"
+      "${e.name} = ${b(e.value)} (${e.descriptionText}) per ${eventSender(e)}"
     )
   } else {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
@@ -82,7 +82,7 @@ void handle_jsonLifo(Event e) {
   if (e.name == 'jsonLifo') {
     ArrayList lifo = fromJson(e.value)
     logInfo('handle_jsonLifo',
-      "lifo = ${bList(lifo)} (decoded json) per ${eventSender(e)}"
+      "lifo = ${bList(lifo)} (${e.descriptionText}) per ${eventSender(e)}"
     )
   } else {
     logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
@@ -306,12 +306,13 @@ void configPbsgUsingParse(ChildDevW pbsg) {
     ]
     String jsonPrefs = toJson(prefs)
     logWarn('configPbsgUsingParse', ["Calling ${devHued(pbsg)}.parse(...)",
-      "Current parameter ${b("logLevel: 'TRACE'")} provides copious logging",
-      "Once flows are understood, ${b("logLevel: 'INFO'")} reduces logging",
       "prefs: ${bMap(prefs)}",
-      "jsonPrefs: ${jsonPrefs}"
+      "jsonPrefs: ${jsonPrefs}",
+      "&nbsp;&nbsp;Current parameter ${b("logLevel: 'TRACE'")} provides copious logging",
+      "&nbsp;&nbsp;Once flows are understood, ${b("logLevel: 'INFO'")} reduces logging"
     ].join('<br/>'))
     pbsg.parse(jsonPrefs)
+    //pause(3000)
   } else {
     logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
   }
@@ -443,6 +444,12 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
   subscribe(issuer, attribute, hdlr, ['filterEvents': true])
 }
 
+//void pause(Long waitMs) {
+//  logInfo('pause', alert("Wait ${waitMs}ms for logging and events"))
+//  pauseExecution(waitMs)
+//  logInfo('pause', alert("Resuming after ${waitMs}ms pause."))
+//}
+
 void initialize() {
   setLogLevel('TRACE')  // Use 'INFO' to reduce logging.
   // For each pbsgName:
@@ -465,29 +472,29 @@ void initialize() {
     //     ]
     logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
     ChildDevW pbsg = getOrCreatePBSG(pbsgName)
+    subscribeHandler(pbsg, 'numberOfButtons')
     subscribeHandler(pbsg, 'pushed')
     subscribeHandler(pbsg, 'jsonPbsg')
     subscribeHandler(pbsg, 'active')
     subscribeHandler(pbsg, 'jsonLifo')
     // Assemble solicited configure data (for the current PBSG) and use it to
     // configure the current PBSG via 'pbsg.parse(String json)'.
+    logInfo('initialize', "Configuration and initialize PBSG ${pbsgName}")
     configPbsgUsingParse(pbsg)
-    // Build and run the solicited Test Sequences.
+    // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
     ArrayList testSeqList = getTestSequence(pbsgName)
     logTrace(
       'initialize',
-      "Test Sequence for ${b(pbsgName)}, ${bList(testSeqList)}")
+      "Test Sequence for ${b(pbsgName)}, ${bList(testSeqList)}"
+    )
     Integer actionCnt = testSeqList.size()
     // Call the appropriate PBSG method per Test Action.
-    Integer waitMs = 100
     testSeqList?.eachWithIndex{ testAction, index ->
       String actionLabel = "Action ${index + 1} of ${actionCnt} for ${devHued(pbsg)}:"
-      logInfo('initialize', ["${i(actionLabel)}: ${b(testAction)}",
-        b("Waiting ${waitMs} ms for logging and event callbacks")
-      ].join('<br/>'))
+      logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
       if (testAction == 'Activate_last_active') {
         pbsg.activateLastActive()
-        pauseExecution(waitMs)
+        //pause(1000)
       } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
@@ -496,23 +503,23 @@ void initialize() {
           switch (action) {
             case 'ButtonOn':
               pbsg.activate(target)
-              pauseExecution(waitMs)
+              //pause(1000)
               break
             case 'ButtonOff':
               pbsg.deactivate(target)
-              pauseExecution(waitMs)
+              //pause(1000)
               break
             case 'VswOn':
               pbsg.testVswOn(target)
-              pauseExecution(waitMs)
+              //pause(1000)
               break
             case 'VswOff':
               pbsg.testVswOff(target)
-              pauseExecution(waitMs)
+              //pause(1000)
               break
             case 'VswPush':
               pbsg.testVswPush(target)
-              pauseExecution(waitMs)
+              //pause(1000)
               break
             default:
               logError('initialize', [
