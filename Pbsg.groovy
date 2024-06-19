@@ -358,10 +358,7 @@ void rebuildPbsg() {
   ArrayList currentChildDnis = getChildDevices().collect { d ->
     d.getDeviceNetworkId()
   }
-  logInfo('rebuildPbsg', ['Synchronizing child devices and sending events.',
-    b('Waiting 100ms for logging and event callbacks')
-  ].join('<br/>'))
-  pauseExecution(100)
+  logInfo('rebuildPbsg', 'Synchronizing child devices and sending events.')
   ciPbsg(pbsg)  // Generate PBSG sendEvent(s) (aka commit).
   ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
   orphanedDevices.each { dni ->
