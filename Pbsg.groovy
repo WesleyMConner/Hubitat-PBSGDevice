@@ -76,7 +76,7 @@ metadata {
     ////   - Current values are read using device.currentValue(...)
     attribute 'jsonPbsg', 'String'
     attribute 'active', 'String'
-    attribute 'jsonLifo', 'String'
+    //----> attribute 'jsonLifo', 'String'
   }
   //// PREFERENCES
   ////   - MANUAL adjustents are made via the Hubitat GUI Device drilldown page.
@@ -442,16 +442,16 @@ void ciPbsg(Map pbsg) {                                     // aka checkInPbsg()
       descriptionText: pushedDesc
     )
   }
-  if (lifoChanged) {
-    String desc = "${i(pbsg.priorLifo)} → ${b(pbsg.lifo)}"
-    logTrace('ciPbsg', "Updating attribute ${b('lifo')}: ${desc}")
-    device.sendEvent(
-      name: 'jsonLifo',
-      isStateChange: true,
-      value: toJson(pbsg.lifo),
-      descriptionText: desc
-    )
-  }
+//---->   if (lifoChanged) {
+//---->     String desc = "${i(pbsg.priorLifo)} → ${b(pbsg.lifo)}"
+//---->     logTrace('ciPbsg', "Updating attribute ${b('lifo')}: ${desc}")
+//---->     device.sendEvent(
+//---->       name: 'jsonLifo',
+//---->       isStateChange: true,
+//---->       value: toJson(pbsg.lifo),
+//---->       descriptionText: desc
+//---->     )
+//---->   }
 }
 
 Map pbsg_ActivateButton(Map pbsg, String button) {

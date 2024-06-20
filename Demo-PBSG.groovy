@@ -78,16 +78,16 @@ void handle_active(Event e) {
   }
 }
 
-void handle_jsonLifo(Event e) {
-  if (e.name == 'jsonLifo') {
-    ArrayList lifo = fromJson(e.value)
-    logInfo('handle_jsonLifo',
-      "lifo = ${bList(lifo)} (${e.descriptionText}) per ${eventSender(e)}"
-    )
-  } else {
-    logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
-  }
-}
+//----> void handle_jsonLifo(Event e) {
+//---->   if (e.name == 'jsonLifo') {
+//---->     ArrayList lifo = fromJson(e.value)
+//---->     logInfo('handle_jsonLifo',
+//---->       "lifo = ${bList(lifo)} (${e.descriptionText}) per ${eventSender(e)}"
+//---->     )
+//---->   } else {
+//---->     logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
+//---->   }
+//----> }
 
 //// SOLICIT DATA FOR ONE OR MORE PBSG INSTANCES
 
@@ -476,7 +476,7 @@ void initialize() {
     subscribeHandler(pbsg, 'pushed')
     subscribeHandler(pbsg, 'jsonPbsg')
     subscribeHandler(pbsg, 'active')
-    subscribeHandler(pbsg, 'jsonLifo')
+    //----> subscribeHandler(pbsg, 'jsonLifo')
     // Assemble solicited configure data (for the current PBSG) and use it to
     // configure the current PBSG via 'pbsg.parse(String json)'.
     logInfo('initialize', "Configuration and initialize PBSG ${pbsgName}")
@@ -485,12 +485,12 @@ void initialize() {
     ArrayList testSeqList = getTestSequence(pbsgName)
     logTrace(
       'initialize',
-      "Test Sequence for ${b(pbsgName)}, ${bList(testSeqList)}"
+      "PBSG ${b(pbsgName)} Test Sequence, ${bList(testSeqList)}"
     )
     Integer actionCnt = testSeqList.size()
     // Call the appropriate PBSG method per Test Action.
     testSeqList?.eachWithIndex{ testAction, index ->
-      String actionLabel = "Action ${index + 1} of ${actionCnt} for ${devHued(pbsg)}:"
+      String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
       logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
       if (testAction == 'Activate_last_active') {
         pbsg.activateLastActive()
