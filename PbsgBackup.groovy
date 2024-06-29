@@ -23,6 +23,16 @@ import groovy.json.JsonSlurper as JsonSlurper
 import java.lang.Math as Math
 import java.lang.Object as Object
 
+//// CONFLICT MANAGEMENT
+////   - The owning parent can call - parse(), activate(), deactivate(), ....
+////   - External parties (e.g., Alexa) can adjust vsws - on(), off(), push().
+////   - To reduce (but not eliminate) the risk of conflicting (interleaved)
+////     actions:
+////       - State-changing actions are serialized in 'atomicState.fifo'
+////         using minimalist methods.
+////       - The semaphore 'atomicState.locked' is 'true' when a process is
+////         adjusting state - preventing other competing state changes.
+
 metadata {
   definition(
     name: 'PBSG',
@@ -88,6 +98,20 @@ turned "on" if no other device is turned 'on'.""",
     attribute 'jsonPbsg', 'String'
     attribute 'active', 'String'
   }
+  //// PREFERENCES
+  ////   - MANUAL adjustments are made via Hubitat's GUI Device drilldown page.
+  ////       - Use of type 'Enum'
+  ////           - Per Mike Maxwell, "Enum inputs in drivers ARE NOT DYNAMIC"
+  ////             https://community.hubitat.com/t/driver-commands-with-enum/2110/5
+  ////           - Enum preferences CANNOT BE UPDATED via device.updateSetting().
+  ////           - These constraints
+  ////   - Enums must be fixed (see logLevel below).
+  ////   - Neil Anderson suggests using a custom command instead.
+  ////     https://community.hubitat.com/t/driver-commands-with-enum/2110/11
+  ////   - Below, Preference 'dflt' is of type 'String' so that it operates
+  ////     symmetrically alongside other Preferences - e.g., see parms().
+  ////   - PROGRAMMATIC adjustments are available to the parent App via
+  ////     custom code in 'parse(String json)' - see below.
   preferences {
     input( name: 'buttons',
       title: "${b('Button Names')} (space delimited)",
@@ -115,7 +139,7 @@ turned "on" if no other device is turned 'on'.""",
       type: 'Enum',        // This is a fixed (not dynamic) Enum; so, okay
       multiple: false,
       options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
-      defaultValue: 'TRACE',
+      defaultValue: 'INFO',
       required: true
     )
     input( name: 'logVswActivity',
@@ -127,41 +151,34 @@ turned "on" if no other device is turned 'on'.""",
   }
 }
 
-void addCommandToQueue(Map command) {
-  inspectAtomicState('addCommandToQueue', '131')
-  ArrayList q = atomicState.requestQueue
-  logInfo('addCommandToQueue', "#133 q: ${bList(q)}, command: ${bMap(command)}")
-  q = q ?: []
-  logInfo('addCommandToQueue', "#134 q: ${bList(q)}, command: ${bMap(command)}")
-  atomicState.requestQueue = q.push(command)
-  logInfo('addCommandToQueue', "#137 q: ${bList(q)}")
-//=>  ifLogDebug() {
-    ArrayList queued = ['']
-    queued = q?.eachWithIndex() { m, i ->
-      logInfo('addCommandToQueue', "#141 i: ${i}: ${bMap(m)}")
-      queued << "${i}: ${bMap(m)}"
-    }
-    logDebug('addCommandToQueue', queued)
-//=>  }
-}
+//// FIFO Management
+////   - All state-changing actions are serialized into 'atomicState.fifo'
+////     using addToQueue(String command).
+////       - Simple commands have zero or more ^-delimited String arguments:
+////           "${command}^${argString1}^${argString2}^...^${argN}"
+////       - Complex commands serialize arguments using JSON:
+////           "${command}^${jsonString}"
+////   - The semaphore 'atomicState.locked' is 'true' when a process is
+////     adjusting state - blocking competing state changes.
 
-void inspectAtomicState(fn, line) {
-  Map m = atomicState
-  m.each { k, v ->
-    logTrace('inspectAtomicState', "#${line} ${fn} w/ >${k}<: >${v}<")
+void addCommandToQueue(String command) {
+  ArrayList q = atomicState.requestQueue ?: []
+  atmomicState.requestQueue = q.push(command)
+  ifLogDebug() {
+    ArrayList queued = ['']
+    queued = q?.eachWithIndex() { l, i -> queued.add("${i}: ${l}") }
+    logDebug('addCommandToQueue', queued)
   }
 }
 
-Map nextCommandFromQueue() {
-  inspectAtomicState('nextCommandFromQueue', '156')
+ArrayList nextCommandFromQueue() {
   // Returns a list with the command in position 0 and args 1..N
   ArrayList q = atomicState.requestQueue ?: []
-  logInfo('nextCommandFromQueue', "#151 ${bList(q)}")
-  Map next = q.removeAt(0)
-  logInfo('nextCommandFromQueue', "#153 ${bMap(next)}")
+  ArrayList next = q.removeAt(0).split('^')
   atmomicState.requestQueue = q
   return(next)
 }
+
 
 void releaseLock() { atomicState.locked = false }
 
@@ -169,7 +186,6 @@ Map coPbsg() {
   // This method:
   //   - Hydrate a PBSG Map from the latest 'jsonPbsg' attribute sendEvent().
   //   - Absent prior history, initialize 'active' (null) and 'lifo' ([]).
-  inspectAtomicState('coPbsg', '172')
   Map pbsg = null
   if (!atomicState.locked) {
     atomicState.locked = true
@@ -194,7 +210,6 @@ Map pbsg_CoreKeysOnly(Map pbsg) {
 }
 
 Map ciPbsg() {
-  inspectAtomicState('ciPbsg', '197')
   // When an attempt is made to check in a PBSG several things occur:
   //   1. Exit if atomicState.locked is false.
   //   2. Determine the extent of the PBSG change (if any).
@@ -250,78 +265,66 @@ Map ciPbsg() {
 }
 
 void processCommandQueue(Map pbsg) {
-  atomicState.remove('activeCO')
-  inspectAtomicState('processCommandQueue', '253')
   // Once a PBSG is obtained with coPbsg():
   //   - This method is called to process all queued commands.
   //   - On completion, releaseLock() is called.
   if (pbsg == null) {
     logError('processCommandQueue', 'Called with null "pbsg" parameter.')
   } else {
-    Map command = null
-    inspectAtomicState('processCommandQueue', '260')
+    ArrayList command
     while (command = nextCommandFromQueue()) {
-      switch(command.name) {
+      switch(command[0]) {
         case 'updateSettings':
           if (settings) {
-            if (assertHealthySettings(settings) == 'ALTERED') {
-              // Reset PBSG keys and rebuild
-              //-> atomicState.remove('requestQueue')
-              //-> atomicState.remove('locked')
-              inspectAtomicState('processCommandQueue', '270')
-              pbsg.active = pbsg.priorActive = null
-              pbsg.lifo = pbsg.priorLifo = []
-              if (pbsg_Rebuild(pbsg)) {
-                pruneOrphanedDevices(pbsg)
-                ciPbsg(pbsg)
-              }
-            }
+            applyAdjustedSettings(pbsg, settings)
           } else {
             logError('processCommandQueue', ["Command: ${b('updateSettings')}",
               b('No application "settings" were found.')
             ])
           }
-          break
-        case 'parse':
-          // Externally-supplied alternative to settings.
-          Map config = settings.findAll { k, v -> (k) }  //  Copies settings
-          config << fromJson(command.value)              //  Revise some keys
-          logTrace('processCommandQueue', ["Command: ${b('parse')}",
-            "config: ${bMap(config)}"
-          ])
-          if (config) {
-            if (assertHealthySettings(config) == 'ALTERED') {
-              // Reset PBSG keys and rebuild
-              atomicState.remove('requestQueue')
-              atomicState.remove('locked')
-              inspectAtomicState('processCommandQueue', '296')
-              pbsg.active = pbsg.priorActive = null
-              pbsg.lifo = pbsg.priorLifo = []
-              if (pbsg_Rebuild(pbsg)) {
-                pruneOrphanedDevices(pbsg)
-                ciPbsg(pbsg)
-              }
-            }
+          // Ensure logging preferences exist and are applied (w/out rebuild)
+          if (settings?.logLevel == null) {
+            logError('processCommandQueue', 'Preference for logLevel is null.')
           } else {
-            logError('processCommandQueue', ["Command: ${b('parse')}",
-              b('No application "config" was found.')
-            ])
+            setLogLevel(settings.logLevel)
           }
-          break
+          if (settings?.logVswActivity == null) {
+            logError('processCommandQueue', 'Preference for logVswActivity is null.')
+          }
+          // If any of the following have changed (return true), rebuild PBSG.
+          if (revisedHealthyButtonsString(settings.buttons)
+            || revisedHealthyDfltString(settings.dflt)
+            || revisedHealthyInstType(settings.instType)
+          ) {
+            // Reset all keys in the checked out PBSG to 'start from scratch'
+            pbsg.active = null
+            pbsg.lifo = []
+            pbsg.priorActive = null
+            pbsg.priorLifo = []
+          }
+          break;
+        //-> case 'refreshVsws':
+        //->   // Support child VSW refresh in isolation for system restart, etc.
+        //->   break;
+        case 'parse':
+          // Process externally-supplied alternative to settings.
+          break;
         case 'activate':
-          String button = command.value
+          String button = command[1]
           logTrace('activate', button)
+          Map pbsg = coPbsg()
           pbsg_ActivateButton(pbsg, button)
           ciPbsg(pbsg)
-          break
-        case 'deactivate':
-          String button = command.value
+          break;
+        case 'deactivate:'
+          String button = command[1]
           logTrace('deactivate', button)
+          pbsg = coPbsg()
           pbsg_DeactivateButton(pbsg, button)
           ciPbsg(pbsg)
-          break
-        case 'toggle':
-          String button = command.value
+          break;
+        case 'toggle'
+          String button = command[1]
           if (pbsg.active == button) {
             logTrace('processCommandQueue', "Push toggling ${button} off.")
             pbsg_DeactivateButton(pbsg, button)
@@ -329,88 +332,76 @@ void processCommandQueue(Map pbsg) {
             logTrace('processCommandQueue', "Push toggling ${button} on.")
             pbsg_ActivateButton(pbsg, button)
           }
-          break
-        //-> case 'refreshVsws':
-        //->   // Support child VSW refresh in isolation for system restart, etc.
-        //->   break
+          break;
       }
     }
     releaseLock()
   }
 }
 
-String assertHealthySettings(Map settings) {
-  // This method applies settings.logLevel in isolation if healthy.
-  // This method returns:
-  //      'ISSUES': One or more issues were reported to the Hubitat log.
-  //   'UNCHANGED': Settings are healthy AND unchanged.
-  //     'ALTERED': Settings are healthy AND altered, requiring a PBSG rebuild.
-  String result
-  ArrayList issues = []
-  if (settings == null) {
-    issues << "Argument ${b('settings')} is null."
+void applyAdjustedSettings(Map pbsg, Map settings) {
+  // Ensure logging preferences exist and are applied (w/out rebuild)
+  if (settings.logLevel == null) {
+    logWarn('applyAdjustedSettings', "Missing ${b('settings.logLevel')}")
   } else {
-    if (settings.logLevel == null) {
-      issues << "Preference ${b('logLevel')} is null."
-    } else {
-      setLogLevel(settings.logLevel)
-    }
-    if (settings.logVswActivity == null) {
-      issues << "Preference ${b('logVswActivity')} is null."
-    }
-    if (settings.buttons == null) {
-      issues << "Preference ${b('buttons')} is null."
-    }
-    String markDirty = buttons?.replaceAll(/[\W_&&[^_ ]]/, '▮')
-    if (buttons != markDirty) {
-      issues << [
-        "Invalid ${b('buttons')} string:",
-        buttons,
-        "${markDirty} ('▮' denotes problematic characters)",
-      ].join('<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')
-    }
-    ArrayList prospectiveButtonsList = spaceDelimitedButtons.tokenize(' ')
-    Integer prospectiveButtonsCount = prospectiveButtonsList.size()
-    if (prospectiveButtonsCount < 2) {
-      issues << [
-        'Two buttons are required to proceed:',
-        "Found ${prospectiveButtonsCount} buttons: ${bList(prospectiveButtonsList)}"
-      ].join('<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')
-    }
-    if (settings.dflt == null) {
-      issues << "Preference ${b('dflt')} is null (expected 'not_applicable')"
-    }
-    if (! [prospectiveButtonsList.contains(settings.dflt)]) {
-      issues << [
-        "Preference ${b('dflt')} (${settings.dflt}) not present among ",
-        "buttons: ${bList(prospectiveButtonsList)}"
-      ].join('<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')
-    }
-    if (settings.instType == null) {
-      issues << "Preference ${b('instType')} is null."
-    }
+    setLogLevel(settings.logLevel)
   }
-  if (issues) {
-    result = 'ISSUES'
-    logError('assertHealthySettings', [ 'Known issues:', *issues ])
-  } else {
-    result = (
-      prospectiveButtonsList != atomicState.buttonsList
-      || settings.dflt != atomicState.dflt
-      || settings.instType != atomicState.instType
-    ) ? 'ALTERED' : 'UNCHANGED'
-    if (result == 'ALTERED') {
-      // Normalize settings, update atomicState and update attributes
-      ArrayList oldButtonsList = atomicState.buttonsList
-      Integer oldButtonCount = oldButtonsList.size()
-      atomicState.buttonsList = prospectiveButtonsList
-      device.updateSetting(
-        'buttons',
-        [value: prospectiveButtonsList.join(' '), type: 'String']
-      )
-      Integer oldButtonsCount = oldButtonsList.size()
-    if (oldButtonsCount != prospectiveButtonsCount) {
-      String desc = "${i(oldButtonsCount)} → ${b(prospectiveButtonsCount)}"
+  if (settings?.logVswActivity == null) {
+    logWarn('processCommandQueue', "Missing ${b('settings.logVswActivity')}")
+  }
+  // If any of the following have changed (i.e., return true), rebuild the PBSG.
+  if (revisedHealthyButtonsString(settings.buttons)
+   || revisedHealthyDfltString(settings.dflt)
+   || revisedHealthyInstType(settings.instType)
+  ) {
+    // Without releasing the lock, edit the PBSG Map (passed by reference)
+    // to (effectively) "start from scratch"
+
+
+
+    rebuildPbsg()
+  }
+}
+
+Boolean revisedHealthyButtonsString(String spaceDelimitedButtons) {
+  // This method:
+  //   - Logs ANY issues with the provided string and immediately returns FALSE.
+  //   - If the provided string meets sufficiency requirements AND represents
+  //     a change in the buttons OR their order:
+  //       - Normalize settings.buttons (buttons delimited with a single space)
+  //       - Update the ArrayList 'atomicState.buttonsList'
+  //       - Update the attribute 'numberOfButtons' if changed.
+  //       - Return TRUE indicating that a PBSG rebuilt is required.
+  Boolean revisedButtons = false
+  String markDirty = buttons?.replaceAll(/[\W_&&[^_ ]]/, '▮')
+  ArrayList newButtonsList = spaceDelimitedButtons.tokenize(' ')
+  Integer newButtonsCount = newButtonsList.size()
+  ArrayList oldButtonsList = atomicState.buttonsList
+  if (spaceDelimitedButtons == null) {
+    logError('revisedHealthyButtonsString', ['',
+      "Argument 'spaceDelimitedStrings' is null.",
+      'If a PBSG exist, it is left AS IS.'
+    ])
+  } else if (buttons != markDirty) {
+    logError('updatedButtonsString', ['',
+      "Invalid ${b('buttons')} string:",
+      buttons,
+      "${markDirty} ('▮' denotes problematic characters)",
+      'If a PBSG exist, it is left AS IS.'
+    ])
+  } else if (newButtonsCount < 2) {
+    logError('revisedHealthyButtonsString', ['',
+      'Two buttons are required to proceed',
+      "Found ${newButtonsCount} buttons: ${buttonsList.join(', ')}",
+      'If a PBSG exist, it is left AS IS.'
+    ])
+  } else if (! newButtonsList.equals(oldButtonsList)) {
+    // Sufficiency requirements are met AND the buttons list has changed.
+    atomicState.buttonsList = buttonsList
+    device.updateSetting('buttons', [value: buttonsList.join(' '), type: 'String'])
+    Integer oldButtonsCount = oldButtonsList.size()
+    if (newButtonsCount != newButtonsCount) {
+      String desc = "${i(oldButtonsCount)} → ${b(newButtonsCount)}"
       logTrace(
         'updatedButtonsString',
         "Updating attribute ${b('numberOfButtons')}: ${desc}"
@@ -418,19 +409,123 @@ String assertHealthySettings(Map settings) {
       device.sendEvent(
         name: 'numberOfButtons',
         isStateChange: true,
-        value: prospectiveButtonsCount,
+        value: newButtonsCount,
         unit: '#',
         descriptionText: desc
       )
     }
-    }
+    revisedButtons = true
+  }
+  return revisedButtons
+}
+
+Boolean revisedHealthyDfltString(String dflt) {
+  // This method:
+  //   - Ensures 'dflt' (if provided) is a legitimate button.
+  //   - Preserves the working default button as 'atomicState.dfltButton'.
+  //   - When the default is revised, this method returns TRUE (indicating a
+  //     PBSG rebuild may be required) otherwise it returns FALSE.
+  Boolean revisedDflt
+  String newDflt = (dflt == 'not_applicable') ? null : dflt
+  ArrayList buttonsList = atomicState.buttonsList
+  if (newDflt && (! buttonsList?.contains(newDflt))) {
+    logError(
+      'revisedHealthyDfltString',
+      "The settings.dflt (${b(dflt)}) is not found in buttons (${bList(buttonsList)})"
+    )
+  } else if (newDflt != atomicState.dfltButton) {
+    atomicState.dfltButton = newDflt
+    revisedDflt = true
+  }
+  return revisedDflt
+}
+
+Boolean revisedHealthyInstType(String instType) {
+  // This method:
+  //   - The String 'instType' exists to differentate prospective descendants
+  //     of PBSG (as a pseudo-Class). Other than scanning for illadvised
+  //     characters, offered Strings are accepted essentially as-is.
+  //   - As the 'instType' may matter if future applications, changes are
+  //     registered into atomicState and applied to the current PBSG (without
+  //     fanfare). There is no attribute publication for instType.
+  revisedInstType = false
+  String markDirty = instType?.replaceAll(/[\W_&&[^_]]/, '▮')
+  String oldInstType = atomicState.instType
+  if (instType != markDirty) {
+      logError('revisedHealthyInstType', ["Invalid ${b('instType')} preference:",
+      instType,
+      "${markDirty} ('▮' denotes problematic character).",
+      'If a PBSG exist, it is left AS IS.'
+    ])
+  } else if {instType != oldInstType} {
+    atomicState.instType = instType
+    revisedInstType = true
+  }
+  return revisedInstType
+}
+
+Boolean revisedHealthyLogLevel(String logLevel) {
+  // This method:
+
+  result = false
+  ArrayList options = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR']
+  if (!options.contains(logLevel)) {
+    logError(
+      'revisedHealthyLogLevel',
+      "logLevel (${b(logLevel)}) not in ${bList(options)}."
+    )
+  } else {
+    device.updateSetting('logLevel', [value: logLevel, type: 'Enum'])
+    settings?.logLevel && setLogLevel(settings.logLevel)
+    result = true
   }
   return result
 }
 
-//-> void refreshVsws() {
-//->   // Support child VSW refresh in isolation for system restart, etc.
-//-> }
+void refreshVsws() {
+        // Support child VSW refresh in isolation for system restart, etc.
+}
+
+void parse() {
+        // Process externally-supplied alternative to settings.
+}
+
+void activate(String button) {
+}
+
+void deactivate(String button) {
+        String button = command[1]
+        logTrace('deactivate', button)
+        pbsg = coPbsg()
+        pbsg_DeactivateButton(pbsg, button)
+        ciPbsg(pbsg)
+        break;
+}
+
+void toggle(String button) {
+}
+
+
+// DISPATCHED CHILD TEST ACTIONS ON ARRIVAL
+//   - The resulting client actions are queued for execution.
+
+void testVswOn(String button) {
+  logInfo('testVswOn', 'Simulating an external vswWithToggle.on()')
+  getVswForButton(button).on()
+}
+
+void testVswOff(String button) {
+  logInfo('testVswOn', 'Simulating an external vswWithToggle.off()')
+  getVswForButton(button).off()
+}
+
+void testVswPush(String button) {
+  logInfo('testVswOn', 'Simulating an external vswWithToggle.push()')
+  getVswForButton(button).push()
+}
+
+
+
 
 //// DEVICE LIFECYCLE METHODS
 ////   - These methods are called by Hubitat as explained below.
@@ -466,10 +561,27 @@ void updated() {
   ifSufficientSettingsConfigure('updated()')
 }
 
+// REVIEW !!!
 void configure() {
   // Callable on demand per capability 'Configuration'.
-  // TBD: Migrate to Command Queue
+  if (
+    revisedHealthyButtonsString(settings.buttons)
+    && revisedHealthyDfltString(settings.dflt)
+    && revisedHealthyInstType(settings.instType)
+  ) {
+    logTrace(
+      'configure',
+      'Preferences are healthy, rebuilding PBSG (from scratch).'
+    )
+    rebuildPbsg()
+  } else {
+    logError('configure', 'Unhealthy Preferences/Settings, see Hubitat logs.')
+  }
 }
+
+//// SETTINGS VALIDATION
+////   - Check MANUAL settings adjustments for updated()
+////   - Check PROGRAMMATIC adjustments for parse(String json)
 
 Integer buttonNameToPushed(String button) {
   // Button name to button 'keypad' position is always computed 'on-the-fly'.
@@ -485,95 +597,32 @@ Integer buttonNameToPushed(String button) {
   return result
 }
 
-/*
-  name: 'config',
-  value: "${jsonConfigMap}",
-  descriptionText: "Updated config map ${jsonConfigMap}",
-  isStateChange: null  // queued command, n/a
-
-  name: 'activate',
-  value: "${button}",
-  descriptionText: "Activate Button ${button}",
-  isStateChange: null  // queued command, n/a
-
-  name: 'deactivate',
-  value: "${button}",
-  descriptionText: "Deactivate Button ${button}",
-  isStateChange: null  // queued command, n/a
-
-  name: 'testVswOn',
-  value: "${button}",
-  descriptionText: "Simulate ${getVswForButton(button)} turned on",
-  isStateChange: null  // test action, n/a
-
-  name: 'testVswOff',
-  value: "${button}",
-  descriptionText: "Simulate ${getVswForButton(button)} turned off",
-  isStateChange: null  // test action, n/a
-
-  name: 'testVswPush',
-  value: "${button}",
-  descriptionText: "Simulate ${getVswForButton(button)} pushed",
-  isStateChange: null  // test action, n/a
-*/
-
-void parse(ArrayList commands) {
-  atomicState.remove('activeCO')
-  atomicState.remove('requestQueue')
-  inspectAtomicState('parse', '523')
-  // Accepts an ArrayList of high-level commands.
-  commands.each { command ->
-    // Some commands are added to the atomicState.requestQueue.
-    // The test commands (which simulate externally-driven VSW state changes)
-    // are forwarded to the appropriate VSW.
-    //   - These changes cause the VSW to take actions that (inevitably)
-    //     queue actions in the atomicState.requestQueue.
-    if (['config', 'activate', 'deactivate'].contains(command.name)) {
-      logTrace('parse(ArrayList)', "command: ${bMap(command)}")
-      addCommandToQueue(command)
-    } else if (['testVswOn', 'testVswOff', 'testVswPush'].contains(command.name)) {
-      DevW d = getVswForButton(command.value)
-      String operation = command.name.substring(7)
-      logTrace('parse', "Performing ${b(operation)} on ${b(d.getDeviceNetworkId())}")
-      d."${operation}"
-    } else {
-      logWarn('parse', "Unsupported command: ${bMap(command)}")
-    }
-  }
-}
-
-void turnOnVsw(String button) {
-  ChildDevW d = getVswForButton(button)
-  if (d) {
-    // Parse expects a list (ArrayList) of commands (Maps)
-    ArrayList commands = [] << [
-      name: 'switch',
-      value: 'on',
-      descriptionText: "Turned ${b('on')} ${devHued(d)}",
-      isStateChange: (d.switch != 'on')
-    ]
-    d.parse(commands)
-  }
-}
-
-void turnOffVsw(String button) {
-  if (button) {
-    ChildDevW d = getVswForButton(button)
-    if (d) {
-      // Parse expects a list (ArrayList) of commands (Maps)
-      ArrayList commands = [] << [
-        name: 'switch',
-        value: 'off',
-        descriptionText: "Turned ${b('off')} ${devHued(d)}",
-        isStateChange: (d.switch != 'off')
-      ]
-      d.parse(commands)
-    }
-    if (settings?.logVswActvity) {
-      logInfo('turnOffVsw', "Turned off ${d.getDeviceNetworkId()}")
-    }
-  } else {
-    logError('turnOffVsw', 'Received null parameter "button"')
+void parse(String jsonConfig) {
+  // PROCESS PROGRAMMATIC SETTINGS CHANGE
+  //   - This method is exposed to clients and provides a programmatic
+  //     mechanism for udpdating preferences (aka settings). Individual
+  //     settings are updated iff per-field validation tests pass.
+  //   - Any issues are reported via the Hubitat logs.
+  //   - The configure() method is called iff sufficient settings exist.
+  // Expected JSON
+  //   A serialized JSON Map with four (OPTIONAL) keys:
+  //     toJson([
+  //              buttons: <String>,  // Adjusts settings.buttons
+  //                 dflt: <String>,  // Leverages setDefaultButton()
+  //             instType: <String>,  // Adjusts settings.instType
+  //       logVswActivity: <Booelan>  // Adjusts settings.logLevel
+  //     ])
+  Map parms = fromJson(jsonConfig)
+  logTrace('parse', "Received parms: ${bMap(parms)} (from Json)")
+  if (
+    revisedHealthyButtonsString(parms.buttons ?: settings.buttons)
+    && revisedHealthyDfltString(parms.dflt ?: settings.dflt)
+    && revisedHealthyInstType(parms.instType ?: settings.instType)
+    && revisedHealthyLogLevel(parms.logLevel ?: settings.logLevel)
+    && healthyLogVswActivity(parms.logVswActvity ?: settings.logVswActvity)
+  ) {
+    logTrace('parse', "Parms are healthy. Re-Building PBSG (from scratch).")
+    rebuildPbsg()
   }
 }
 
@@ -584,12 +633,16 @@ String currentSettingsHtml() {
   ].join('<br/>')
 }
 
-Boolean pbsg_Rebuild(Map pbsg) {
-  inspectAtomicState('pbsg_Rebuild', '585')
-  // Return true if rebuild is successful.
+void rebuildPbsg() {
+
+  if (atomicState.taskList.size())
+  atomicState.taskList == 'REBUILDING'
+  Map pbsg =
+  ArrayList expectedChildDnis = []
   ArrayList buttonsList = atomicState.buttonsList
   buttonsList.each { button ->
     ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
+    expectedChildDnis << vsw.getDeviceNetworkId()
     pbsg.lifo.push(button)
     if (vsw.switch == 'on') {
       // Move the button from the LIFO to active
@@ -600,22 +653,19 @@ Boolean pbsg_Rebuild(Map pbsg) {
   if (!pbsg.active && settings.dflt && settings.dflt != 'not_applicable') {
     pbsg_EnforceDefault(pbsg)
   }
-}
-
-void pruneOrphanedDevices(Map pbsg) {
-  ArrayList buttonsList = atomicState.buttonsList
-  ArrayList expectedChildDnis = buttonsList.collect { button ->
-    "${device.getLabel()}_${button}"
-  }
   ArrayList currentChildDnis = getChildDevices().collect { d ->
     d.getDeviceNetworkId()
   }
+  logInfo('rebuildPbsg', 'Synchronizing child devices and sending events.')
+  ciPbsg(pbsg)  // Generate PBSG sendEvent(s) (aka commit).
   ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
   orphanedDevices.each { dni ->
     logWarn('rebuildPbsg', "Removing orphaned device ${b(dni)}.")
     deleteChildDevice(dni)
   }
+  atomicState.taskList == 'INACTIVE'
 }
+
 
 Map pbsg_ActivateButton(Map pbsg, String button) {
   // Make 'button' active (if not already) in pbsg.
@@ -669,6 +719,12 @@ Map pbsg_DeactivateButton(Map pbsg, String button) {
   }
   return pbsg
 }
+
+
+
+
+
+
 
 Map pbsg_EnforceDefault(Map pbsg) {
   if (pbsg?.active == null && settings?.dflt && settings.dflt != 'not_applicable') {
@@ -801,6 +857,41 @@ ChildDevW getVswForButton(String button) {
   return d
 }
 
+void turnOnVsw(String button) {
+  ChildDevW d = getVswForButton(button)
+  if (d) {
+    // Parse expects a list (ArrayList) of commands (Maps)
+    ArrayList commands = [] << [
+      name: 'switch',
+      value: 'on',
+      descriptionText: "Turned ${b('on')} ${devHued(d)}",
+      isStateChange: (d.switch != 'on')
+    ]
+    d.parse(commands)
+  }
+}
+
+void turnOffVsw(String button) {
+  if (button) {
+    ChildDevW d = getVswForButton(button)
+    if (d) {
+      // Parse expects a list (ArrayList) of commands (Maps)
+      ArrayList commands = [] << [
+        name: 'switch',
+        value: 'off',
+        descriptionText: "Turned ${b('off')} ${devHued(d)}",
+        isStateChange: (d.switch != 'off')
+      ]
+      d.parse(commands)
+    }
+    if (settings?.logVswActvity) {
+      logInfo('turnOffVsw', "Turned off ${d.getDeviceNetworkId()}")
+    }
+  } else {
+    logError('turnOffVsw', 'Received null parameter "button"')
+  }
+}
+
 //// SUPPORT FOR CAPABILITY 'PushableButton'
 
 void push(Integer buttonNumber) {
@@ -816,7 +907,9 @@ void push(Integer buttonNumber) {
 
 //// UNUSED / UNSUPPORTED
 
-void parse(String) {
+void parse(ArrayList actions) {
   // This method is reserved for interaction with FUTURE parent devices.
-  logError('parse(String)', 'Called unexpectedly')
+  logWarn('parse', ['parse(ArrayList) ignored:',
+    actions.join('<br/>')
+  ], '<br/>')
 }

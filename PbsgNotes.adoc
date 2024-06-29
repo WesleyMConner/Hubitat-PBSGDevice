@@ -1,0 +1,83 @@
+= PBSG Notes
+
+== Conflict Management
+A *PBSG Instance* must ensure stability in a multithreaded environment.
+
+* The App | Device that owns a PBSG can call invoke state-changing methods. +
+Examples: `parse(json)`, `activate(button)`, `deactivate(button)`, ...
+
+* A PBSG's _VswWithToggle_ devices can be turned on(), off() or toggled with push(). +
+Examples: Alexa and Hubitat's Rule Machine can adjust switch state.
+
+To reduce (but not fully eliminate) the risk of conflicting interleaved actions:
+
+* State-changing actions are added to an `atomicState.fifo` using minimalistic methods.
+* The semaphore `atomicState.locked` is set when heavier state-changing methods _check out_ a PBSG in memory to process the FIFO queue.
+
+== Preferences
+
+Manual Adjustments::
+Are made using the "Preferences" section of the Hubitat GUI's per-device drilldown page. After changes are made in the GUI, the "Save Preferences" button triggers the `void updated()` method in the application to process any changes.
+
+Programmatic Adjustments::
+The parent *App | Device* can adjust "Preferences" by calling `parse(String json)` with a Map that contains the optional keys: *buttons*, *dflt*, *instType* and *logVswActivity*. The values of supplied keys are used to adjust in-kind application settings.
+
+Know Issues with type 'Enum'::
+Per https://community.hubitat.com/t/[Mike Maxwell], "Enum inputs in drivers ARE NOT DYNAMIC". As a consequence, Preferences of type Enum *cannot* be updated via `device.updateSetting()`. +
++
+*Example 1:* An enum cannot be constructed on-the-fly such that a clients is constrained to selecting a *dflt* button from among the current button names (solicited via `settings.buttons`). Instead the type for *dflt* is String and software must ensure the user-provided value is a legitimate button (in `settings.buttons`). +
++
+*Example 2:* In the case of `settings.logLevel`, the available options never change (are not dynamic); so, operate within the limitations of type Enum.
+
+== FIFO Management
+All state-changing actions are serialized into `atomicState.fifo` using addToQueue(String command).
+
+* Simple commands have zero or more ^-delimited String arguments: +
+Example: `"${command}\^${argString1}^${argString2}^...^${argN}"`
+
+* Complex commands serialize arguments using JSON: +
+Example: `"${command}^${jsonString}"`
+
+The semaphore `atomicState.locked` is TRUE when a process is adjusting state - blocking competing state changes.
+
+== PBSG parse()
+
+Supported high-level commands available via `parse(...)`, include:
+
+[width="75%", frame="none", grid="all", cols="^50,^50"]
+|===
+h|name h|value
+|config |String jsonConfigMap
+|activate |String buttonName
+|deactivate |String buttonName
+|===
+
+When high-level commands are received by `parse(...)`, they are added to `atomicState.requestQueue`. When high-level requests are dequeued, low-level operations are performed, atomicState is updated and sendEvent() updates are issued for advertised attributes.
+
+  commands.each { command ->
+    if (['config', 'activate', 'deactivate'].contains[command.name]) {
+      addCommandToQueue(command)
+    } else {
+      logWarn('parse', "Unsupported command: ${bMap(command)}")
+    }
+  }
+}
+
+
+
+  // PROCESS PROGRAMMATIC SETTINGS CHANGE
+  //   - This method is exposed to clients and provides a programmatic
+  //     mechanism for udpdating preferences (aka settings). Individual
+  //     settings are updated iff per-field validation tests pass.
+  //   - Any issues are reported via the Hubitat logs.
+  //   - The configure() method is called iff sufficient settings exist.
+  // Expected JSON
+  //   A serialized JSON Map with four (OPTIONAL) keys:
+  //     toJson([
+  //              buttons: <String>,  // Adjusts settings.buttons
+  //                 dflt: <String>,  // Leverages setDefaultButton()
+  //             instType: <String>,  // Adjusts settings.instType
+  //       logVswActivity: <Booelan>  // Adjusts settings.logLevel
+  //     ])
+  // TBD: Migrate to Command Queue
+

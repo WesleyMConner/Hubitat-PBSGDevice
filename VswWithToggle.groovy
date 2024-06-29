@@ -28,7 +28,12 @@ metadata {
     name: 'VswWithToggle',
     namespace: 'wesmc',
     author: 'Wesley M. Conner',
-    importUrl: 'PENDING',
+    description: 'This device is a sub-component of device wesmc.PBSG',
+    category: '',   // As of Q2'24 Not used
+    iconUrl: '',    // As of Q2'24 Not used
+    iconX2Url: '',  // As of Q2'24 Not used
+    documentationLink: 'A Hubitat Community post is pending',
+    importUrl: 'https://github.com/WesleyMConner/Hubitat-PBSGLibrary',
     singleThreaded: 'false'
   ) {
     capability "Switch"          // Attribtes:
@@ -36,88 +41,62 @@ metadata {
                                  // Commands: on(), off()
     capability "Momentary"       // Commands: push()
   }
-  preferences {
-    input(
-      name: "logLevel",
-      title: "Logging Threshold Level",
-      type: "enum",
-      multiple: false,
-      options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],
-      defaultValue: 'INFO',
-      required: true
-    )
-  }
+  preferences { /* FULLY-MANAGED BY PARENT DEVICE */ }
 }
 
-// Lifecycle methods
+//// DEVICE LIFECYCLE METHODS
 
 void installed() {
   // Called when a bare device is first constructed.
-  logTrace('installed#56', "this.device.class: ${this.device.class}")
-  logTrace('installed', 'Called, taking no action')
-  settings?.logLevel && setLogLevel(settings.logLevel)
 }
 
 void uninstalled() {
   // Called on device tear down.
-  logTrace('uninstalled', 'Called, taking no action')
-}
-
-void initialize() {
-  // Called on hub startup (per capability "Initialize").
-  logTrace('initialize', 'Called, taking no action')
 }
 
 void updated() {
-  logTrace('updated', 'Entered')
   // Runs when save is clicked in the preferences section
-  //-> setLogLevel(settings.logLevel)
-  logInfo('updated', ['',
-    settings.collect{k, v -> "${b(k)}: ${v}"}.join('<br/>')
-  ].join('<br/>'))
 }
 
-// Methods Expected for Advertised Capabilities
+//// METHODS FOR ADVERTISED CAPABILITIES
+////   - Parent queues and directs all execution and logging.
 
-void on() { parent?.vswWithToggleOn(this.device) }
-
-void off() { parent?.vswWithToggleOff(this.device) }
-
-void push() { parent?.vswWithTogglePush(this.device) }
-
-// Supported, State-Changing Actions
-
-void parse(String action) {
-  // The String version of parse IS NOT supported
-  logWarn('parse', [
-    'parse(String) is not implemented',
-    "Ignored action: ${action}"
-  ].join('<br/>'))
+void on() {
+  String button = parent.vswToButtonName(this.device)
+  parent.addCommandToQueue("${activate}^${button}")
 }
+
+void off() {
+  String button = parent.vswToButtonName(this.device)
+  parent.addCommandToQueue("${deactivate}^${button}")
+}
+
+void push() {
+  // parent?.vswWithTogglePush(this.device)
+  String button = parent.vswToButtonName(this.device)
+  parent.addCommandToQueue("${toggle}^${button}")
+}
+
+//// ADDITIONAL STATE-CHANGING METHODS
+////   - The parent device directs all state changes via parse().
 
 void parse(ArrayList actions) {
-  // Each action is a Map that is compatible with sendEvent(Map m).
-  //   - sendEvent() sets the named attribute AND publishes the event
-  //   - Map keys:
-  //                  name: device attribute
-  //                 value: attribute's value
-  //                  unit: Omitted if boolean, '%', ...
-  //       descriptionText: Human-friendly string
-  //         isStateChange: true|false
-  logTrace('parse', "actions: ${actions}")
+  // This command expects actions (an ArrayList) of commands (Maps).
+  // Each Map must be suitable for execution by sendEvent().
+  //      +-----------------+-------------------------+
+  //      |            name | Target device attribute |
+  //      |           value | Attribute's value       |
+  //      | descriptionText | Human-friendly string   |
+  //      |   isStateChange | true or false           |
+  //      |            unit | NOT REQUIRED            |
+  //      +-----------------+-------------------------+
+  // PROCESS THE LIST OF ACTIONS
+  ArrayList allowedActions = ['switch']
   actions.each{ action ->
-    // Some actions can be passed directly to sendEvent()
-    if (action?.name in ['switch']) {
-      logTrace('parse', action.descriptionText)
-      sendEvent(action)
-    }
-    // A config change requires a custom implementation
-    else if (action?.name == 'logLevel') {
-      device.updateSetting(
-        'logLevel', [value: action.value, type: 'Enum']
-      )
-    } else {
-      logWarn('parse', "Ignored ${action}")
-    }
+    if (action?.name in allowedActions) { sendEvent(action) }
   }
 }
+
+//// UNUSED / UNSUPPORTED METHODS
+
+void parse(String) { }

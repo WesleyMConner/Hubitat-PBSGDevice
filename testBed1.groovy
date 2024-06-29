@@ -15,12 +15,17 @@
 // For reference:
 //   Unicode 2190 ← LEFTWARDS ARROW
 //   Unicode 2192 → RIGHTWARDS ARROW
-import com.hubitat.hub.domain.Event as Event
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
 #include wesmc.lUtils
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.InstalledAppWrapper as InstAppW
+import com.hubitat.hub.domain.Event as Event
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import java.lang.Math as Math
+import java.lang.Object as Object
 
 definition (
   name: 'TestBed1',
@@ -44,19 +49,68 @@ Map TestBed1() {
   ) {
     app.updateLabel("TestBed1 (${app.id})")
     section{
-      // GIVEN A FIXED, ONE-LAYER MAP
-      Map w = [active: 'one', lifo: ['two', 'three', 'four']]
-      paragraph "${b('Given Map')}: ${w}"
-
-      // CUSTOM ENCODE THE MAP AS A STRING
-      String x = "active:${w.active}^lifo:${w.lifo}"
-      paragraph "${b('Brute Force Encode It')}: ${x}"
-
-      // RE-HYDRATE THE MAP IN TWO STEPS
-      ArrayList y = x.tokenize('^')
-      paragraph "${b('Hydration Step 1')}: ${y}"
-      Map z = y.collectEntries { e -> e.tokenize(':') }
-      paragraph "${b('Hydration Step 2')}: ${z}"
+      // Begin with an empty list.
+      ArrayList x = []
+      x.push('alpha')
+      x.push('beta')
+      x.push('gamma')
+      x.push('delta')
+      paragraph "At 0: ${x.removeAt(0)}"
+      paragraph "x: ${x}"
+      String s = "This is a test."
+      String sJson = toJson(s)
+      String s2 = fromJson(sJson)
+      paragraph "s: ${s}"
+      paragraph "sJson: ${sJson}"
+      paragraph "s2: ${s2}"
+    }
+    section {
+      /*
+      Map a = [a: 'apple', b: 'banana', c: 'cantelope']
+      paragraph "a: ${a}, class: ${a.class}"
+      MapOp1(a)
+      paragraph "a: ${a}"
+      MapOp2(a)
+      paragraph "a: ${a}"
+      a.x = a.y = 'SOMETHING'
+      paragraph "a: ${a}"
+      */
+      Map a = [a: 'apple', b: 'banana', c: 'cantelope']
+      paragraph "a: ${a}"
+      paragraph "-----"
+      // Use findAll() to create a copy of Map a.
+      Map aDup = a.findAll { k, v -> (k) }
+      paragraph "aDup: ${aDup}"
+      paragraph "-----"
+      Map b = [a: 'apricot', d: 'dragon fruit']
+      paragraph "b: ${b}"
+      paragraph "-----"
+      aDup << b
+      paragraph "a: ${a}"
+      paragraph "aDup w/ b: ${aDup}"
+      Map c = [first: 'ITEM', *:aDup]
+      paragraph "a: ${a}"
+      paragraph "b: ${b}"
+      paragraph "aDup w/ b: ${aDup}"
+      paragraph "c: ${c}"
+    }
+    section {
     }
   }
+}
+
+void MapOp1(Map m) {
+  m << ['d': 'dragon fruit']
+}
+
+void MapOp2(Map m) {
+  paragraph "MapOp2#1: ${m} (${m.size()})"
+  // Use findAll() to create a copy of Map m, then use the copy's keys to
+  // remove Map m keys - avoiding the concurrency trap of a Map removing its
+  // own keys in a closure construct.
+  m.findAll { k, v -> (k) } each { m.remove it.key }
+  paragraph "MapOp2#2: ${m}"
+  // Insert new keys
+  m << [f: 'fig', g: 'grape']
+  paragraph "MapOp2#3: ${m}"
 }

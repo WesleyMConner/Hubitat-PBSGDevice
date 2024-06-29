@@ -61,7 +61,7 @@ void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     Map pbsg = fromJson(e.value)
     logInfo('handle_jsonPbsg',
-      "pbsg = ${bMap(pbsg)} (${e.descriptionText}) per ${eventSender(e)}"
+      "pbsg = <br/>>${bMap(pbsg)}< <br/>>(${e.descriptionText}) <br/>>per ${eventSender(e)}"
     )
   } else {
     logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
@@ -266,7 +266,7 @@ ArrayList getTestActions(String pbsgName) {
     testActions << "${b}_VswOff"
     testActions << "${b}_VswPush"
   }
-  testActions.add('Activate_last_active')
+  //-> testActions.add('Activate_last_active')
   //testActions << 'No more actions'
   return testActions
 }
@@ -291,7 +291,7 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
 void configPbsgUsingParse(ChildDevW pbsg) {
   // Per 'pbsg.groovy', there are two facilities for configuring a PBSG:
   //   (1) MANUALLY: Using the Hubitat GUI's device drilldown page.
-  //   (2) PROGRAMMATICALLY: Using the PBSG's parse(String json) method.
+  //   (2) PROGRAMMATICALLY: Using the PBSG's String json) method.
   // This method demonstrates programatic configuration. It collects settings
   // solicited by 'page1_CreatePBSGs' into a Map. Then, passes a
   // JSON representation of the Map to the PBSG's parse(..) method.
@@ -302,7 +302,8 @@ void configPbsgUsingParse(ChildDevW pbsg) {
       buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
       dflt: defaultButton(prefix),
       instType: 'pbsg',
-      logLevel: 'TRACE'  // This overrides PBSG default of 'INFO'
+      logLevel: 'TRACE',     // (low) TRACE, DEBUG, INFO, WARN, ERROR' (high)
+      logVswActivity: true   // (low) TRACE, DEBUG, INFO, WARN, ERROR' (high)
     ]
     String jsonPrefs = toJson(prefs)
     logWarn('configPbsgUsingParse', ["Calling ${devHued(pbsg)}.parse(...)",
@@ -310,8 +311,12 @@ void configPbsgUsingParse(ChildDevW pbsg) {
       "jsonPrefs: ${jsonPrefs}",
       "&nbsp;&nbsp;Current parameter ${b("logLevel: 'TRACE'")} provides copious logging",
       "&nbsp;&nbsp;Once flows are understood, ${b("logLevel: 'INFO'")} reduces logging"
-    ].join('<br/>'))
-    pbsg.parse(jsonPrefs)
+    ], '<br/>')
+    pbsg.parse([[                        // parse() expects an ArrayList of Maps
+      name: 'config',
+      value: jsonPrefs,
+      descriptionText: "Config PBSG using ${jsonPrefs}",
+    ]])
     //pause(3000)
   } else {
     logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
@@ -360,10 +365,8 @@ Map page2_TestActions() {
       ].join('<br/>'))
       pbsgNames.each{ pbsgName ->
         ArrayList testActions = getTestActions(pbsgName)
-        paragraph([
-          h2("${b('Test Actions')} for the ${b(pbsgName)}"),
-          "  - ${testActions.join('<br/>  - ')}"
-        ].join('<br/>'))
+        paragraph(h2("${b('Test Actions')} for the ${b(pbsgName)}"))
+        paragraph("  - ${testActions.join('<br/>  - ')}")
       }
     }
   }
@@ -492,33 +495,58 @@ void initialize() {
     testSeqList?.eachWithIndex{ testAction, index ->
       String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
       logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
-      if (testAction == 'Activate_last_active') {
-        pbsg.activateLastActive()
-        //pause(1000)
-      } else {
+      //-> if (testAction == 'Activate_last_active') {
+      //->   pbsg.activateLastActive()
+      //->   //pause(1000)
+      //-> } else {
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
           String action = tokenizedAction[1]
           switch (action) {
             case 'ButtonOn':
-              pbsg.activate(target)
+              //pbsg.activate(target)
+              pbsg.parse([[              // parse() expects an ArrayList of Maps
+                name: 'activate',
+                value: "${target}",
+                descriptionText: "Activate Button ${target}",
+              ]])
               //pause(1000)
               break
             case 'ButtonOff':
-              pbsg.deactivate(target)
+              //pbsg.deactivate(target)
+              pbsg.parse([[              // parse() expects an ArrayList of Maps
+                name: 'deactivate',
+                value: "${target}",
+                descriptionText: "Deactivate Button ${target}"
+              ]])
               //pause(1000)
               break
             case 'VswOn':
-              pbsg.testVswOn(target)
+              //pbsg.testVswOn(target)
+              pbsg.parse([[              // parse() expects an ArrayList of Maps
+                name: 'testVswOn',
+                value: target,
+                descriptionText: "Test VSW.on for ${target}"
+              ]])
               //pause(1000)
               break
             case 'VswOff':
-              pbsg.testVswOff(target)
+              //pbsg.testVswOff(target)
+              pbsg.parse([[              // parse() expects an ArrayList of Maps
+                name: 'testVswOff',
+                value: target,
+                descriptionText: "Test VSW.off for ${target}"
+              ]])
               //pause(1000)
               break
             case 'VswPush':
-              pbsg.testVswPush(target)
+              //pbsg.testVswPush(target)
+              pbsg.parse([[              // parse() expects an ArrayList of Maps
+                name: 'testVswPush',
+                value: target,
+                descriptionText: "Test VSW.push for ${target}",
+              ]])
               //pause(1000)
               break
             default:
@@ -532,7 +560,7 @@ void initialize() {
         } else {
           logError('initialize', "unexpected testAction >${testAction}<")
         }
-      }
+      //-> }
     }
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
@@ -548,5 +576,16 @@ void initialize() {
   orphanedDNIs.each{ dni ->
     logWarn('initialize', "Deleting orphaned device w/ DNI: ${b(dni)}")
     deleteChildDevice(dni)
+  }
+  // At this point, the App could exit before the results of running the
+  // tests have been seen by the handlers.
+  Integer maxLoops = 25
+  Integer sleepMs = 2000
+  Integer loopCounter = 0
+  while (loopCounter++ < maxLoops) {
+    pauseExecution(sleepMs)
+    // timeToday is available in Apps but not Drivers
+    //logInfo('initialize', "${loopCounter}: ${timeToday('Thh:mm:ss')}")
+    logInfo('initialize', "Loop Counter: ${loopCounter}")
   }
 }
