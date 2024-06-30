@@ -315,7 +315,7 @@ void configPbsgUsingParse(ChildDevW pbsg) {
     pbsg.parse([[                        // parse() expects an ArrayList of Maps
       name: 'config',
       value: jsonPrefs,
-      descriptionText: "Config PBSG using ${jsonPrefs}",
+      descriptionText: "Config PBSG using JSON",
     ]])
     //pause(3000)
   } else {
@@ -484,6 +484,7 @@ void initialize() {
     // configure the current PBSG via 'pbsg.parse(String json)'.
     logInfo('initialize', "Configuration and initialize PBSG ${pbsgName}")
     configPbsgUsingParse(pbsg)
+    pbsg.inspectAtomicState('XYZ', 'After configPbsgUsingParse()')
     // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
     ArrayList testSeqList = getTestSequence(pbsgName)
     logTrace(
@@ -503,13 +504,14 @@ void initialize() {
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
           String action = tokenizedAction[1]
+          String description = "${index}: ${testAction}"
           switch (action) {
             case 'ButtonOn':
               //pbsg.activate(target)
               pbsg.parse([[              // parse() expects an ArrayList of Maps
                 name: 'activate',
                 value: "${target}",
-                descriptionText: "Activate Button ${target}",
+                descriptionText: description
               ]])
               //pause(1000)
               break
@@ -518,7 +520,7 @@ void initialize() {
               pbsg.parse([[              // parse() expects an ArrayList of Maps
                 name: 'deactivate',
                 value: "${target}",
-                descriptionText: "Deactivate Button ${target}"
+                descriptionText: description
               ]])
               //pause(1000)
               break
@@ -527,7 +529,7 @@ void initialize() {
               pbsg.parse([[              // parse() expects an ArrayList of Maps
                 name: 'testVswOn',
                 value: target,
-                descriptionText: "Test VSW.on for ${target}"
+                descriptionText: description
               ]])
               //pause(1000)
               break
@@ -536,7 +538,7 @@ void initialize() {
               pbsg.parse([[              // parse() expects an ArrayList of Maps
                 name: 'testVswOff',
                 value: target,
-                descriptionText: "Test VSW.off for ${target}"
+                descriptionText: description
               ]])
               //pause(1000)
               break
@@ -545,7 +547,7 @@ void initialize() {
               pbsg.parse([[              // parse() expects an ArrayList of Maps
                 name: 'testVswPush',
                 value: target,
-                descriptionText: "Test VSW.push for ${target}",
+                descriptionText: description
               ]])
               //pause(1000)
               break
@@ -561,6 +563,7 @@ void initialize() {
           logError('initialize', "unexpected testAction >${testAction}<")
         }
       //-> }
+      pbsg.inspectAtomicState('XYZ', "Processed ${index}: ${testAction}")
     }
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
