@@ -13,7 +13,7 @@
 // implied.
 // ---------------------------------------------------------------------------------
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils  // Requires the following imports.
+#include WesMC.lUtils  // Requires the following imports.
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -25,7 +25,7 @@ import java.lang.Object as Object
 
 definition (
   name: 'Demo-PBSG',
-  namespace: 'wesmc',
+  namespace: 'WesMC',
   author: 'Wesley M. Conner',
   description: 'Demonstrate PushButtonSwitchGroup (PBSG) Functionality',
   singleInstance: true,
@@ -424,7 +424,7 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
     logTrace('getOrCreatePBSG', "Using existing ${devHued(d)}")
   } else {
     d = addChildDevice(
-      'wesmc',   // namespace
+      'WesMC',   // namespace
       'PBSG',    // typeName
       dni,       // Device Network Identifier (<pbsgName>_<button>)
       [

@@ -20,11 +20,11 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils
+#include WesMC.lUtils
 
 definition (
   name: 'TestBed3',
-  namespace: 'wesmc',
+  namespace: 'WesMC',
   author: 'Wesley M. Conner',
   description: 'TestBed3',
   singleInstance: true,

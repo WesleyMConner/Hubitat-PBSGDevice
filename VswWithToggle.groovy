@@ -13,7 +13,7 @@
 // implied.
 // ---------------------------------------------------------------------------------
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils  // Requires the following imports.
+#include WesMC.lUtils  // Requires the following imports.
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -26,9 +26,9 @@ import java.lang.Object as Object
 metadata {
   definition(
     name: 'VswWithToggle',
-    namespace: 'wesmc',
+    namespace: 'WesMC',
     author: 'Wesley M. Conner',
-    description: 'This device is a sub-component of device wesmc.PBSG',
+    description: 'This device is a sub-component of device WesMC.PBSG',
     category: '',   // As of Q2'24 Not used
     iconUrl: '',    // As of Q2'24 Not used
     iconX2Url: '',  // As of Q2'24 Not used

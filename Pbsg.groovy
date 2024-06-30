@@ -13,7 +13,7 @@
 // implied.
 // ---------------------------------------------------------------------------------
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils  // Requires the following imports.
+#include WesMC.lUtils  // Requires the following imports.
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -26,10 +26,10 @@ import java.lang.Object as Object
 metadata {
   definition(
     name: 'PBSG',
-    namespace: 'wesmc',
+    namespace: 'WesMC',
     author: 'Wesley M. Conner',
     description: """A virtual PushButtonSwitchGroup (PBSG) device manages two
-or more wesmc.VswWithToggle child devices which are mutually-exclusive 'on'.
+or more WesMC.VswWithToggle child devices which are mutually-exclusive 'on'.
 Optionally, one child device can be designated the 'default' device - i.e.,
 turned "on" if no other device is turned 'on'.""",
     category: '',   // As of Q2'24 Not used
@@ -54,11 +54,11 @@ turned "on" if no other device is turned 'on'.""",
     //// COMMANDS
     ////   - Additional "Commands" (beyond Capabilities) exposed to clients
     ////   - Commands with the prefix "Test":
-    ////       - The following commands give wesmc.PBSG Client Apps an easy way
+    ////       - The following commands give WesMC.PBSG Client Apps an easy way
     ////         to simulate external actions in VswWithToggle child devices.
     ////       - Without these commands:
     ////           - Parent Apps (e.g., Demo-PBSG.groovy) can only access child
-    ////             devices (e.g., instances of wesmc.PBSG). Parent Apps cannot
+    ////             devices (e.g., instances of WesMC.PBSG). Parent Apps cannot
     ////             access grandchild devices (e.g., VswWithToggle devices).
     ////           - Parent Apps would have to use the input() Block Method for\
     ////             permission to access individual VswWithToggle devices.
@@ -128,37 +128,28 @@ turned "on" if no other device is turned 'on'.""",
 }
 
 void addCommandToQueue(Map command) {
-  inspectAtomicState('addCommandToQueue', '131')
   ArrayList q = atomicState.requestQueue
-  logInfo('addCommandToQueue', "#133 q: ${bList(q)}, command: ${bMap(command)}")
-  q = q ?: []
-  logInfo('addCommandToQueue', "#134 q: ${bList(q)}, command: ${bMap(command)}")
-  atomicState.requestQueue = q.push(command)
-  logInfo('addCommandToQueue', "#137 q: ${bList(q)}")
-//=>  ifLogDebug() {
-    ArrayList queued = ['']
-    queued = q?.eachWithIndex() { m, i ->
-      logInfo('addCommandToQueue', "#141 i: ${i}: ${bMap(m)}")
-      queued << "${i}: ${bMap(m)}"
-    }
-    logDebug('addCommandToQueue', queued)
-//=>  }
+  logTrace('addCommandToQueue', "#132 q: ${bList(q)}, command: ${bMap(command)}")
+  if (q == null) { q = [] }
+  logTrace('addCommandToQueue', "#134 q: ${bList(q)}, command: ${bMap(command)}")
+  q << command
+  logTrace('addCommandToQueue', "#136 q: ${bList(q)}")
+  atomicState.requestQueue = q
+  inspectAtomicState('addCommandToQueue', '136')
 }
 
 void inspectAtomicState(fn, line) {
   Map m = atomicState
-  m.each { k, v ->
-    logTrace('inspectAtomicState', "#${line} ${fn} w/ >${k}<: >${v}<")
-  }
+  logTrace('inspectAtomicState', "#${line} ${fn} w/ ${bMap(m)}")
 }
 
 Map nextCommandFromQueue() {
-  inspectAtomicState('nextCommandFromQueue', '156')
+  inspectAtomicState('nextCommandFromQueue', '144')
   // Returns a list with the command in position 0 and args 1..N
   ArrayList q = atomicState.requestQueue ?: []
-  logInfo('nextCommandFromQueue', "#151 ${bList(q)}")
+  logInfo('nextCommandFromQueue', "#147 ${bList(q)}")
   Map next = q.removeAt(0)
-  logInfo('nextCommandFromQueue', "#153 ${bMap(next)}")
+  logInfo('nextCommandFromQueue', "#148 ${bMap(next)}")
   atmomicState.requestQueue = q
   return(next)
 }
@@ -169,7 +160,7 @@ Map coPbsg() {
   // This method:
   //   - Hydrate a PBSG Map from the latest 'jsonPbsg' attribute sendEvent().
   //   - Absent prior history, initialize 'active' (null) and 'lifo' ([]).
-  inspectAtomicState('coPbsg', '172')
+  inspectAtomicState('coPbsg', '160')
   Map pbsg = null
   if (!atomicState.locked) {
     atomicState.locked = true
@@ -194,7 +185,7 @@ Map pbsg_CoreKeysOnly(Map pbsg) {
 }
 
 Map ciPbsg() {
-  inspectAtomicState('ciPbsg', '197')
+  inspectAtomicState('ciPbsg', '185')
   // When an attempt is made to check in a PBSG several things occur:
   //   1. Exit if atomicState.locked is false.
   //   2. Determine the extent of the PBSG change (if any).
@@ -251,7 +242,7 @@ Map ciPbsg() {
 
 void processCommandQueue(Map pbsg) {
   atomicState.remove('activeCO')
-  inspectAtomicState('processCommandQueue', '253')
+  inspectAtomicState('processCommandQueue', '242')
   // Once a PBSG is obtained with coPbsg():
   //   - This method is called to process all queued commands.
   //   - On completion, releaseLock() is called.
@@ -259,7 +250,7 @@ void processCommandQueue(Map pbsg) {
     logError('processCommandQueue', 'Called with null "pbsg" parameter.')
   } else {
     Map command = null
-    inspectAtomicState('processCommandQueue', '260')
+    inspectAtomicState('processCommandQueue', '250')
     while (command = nextCommandFromQueue()) {
       switch(command.name) {
         case 'updateSettings':
@@ -268,13 +259,12 @@ void processCommandQueue(Map pbsg) {
               // Reset PBSG keys and rebuild
               //-> atomicState.remove('requestQueue')
               //-> atomicState.remove('locked')
-              inspectAtomicState('processCommandQueue', '270')
+              inspectAtomicState('processCommandQueue', '259')
               pbsg.active = pbsg.priorActive = null
               pbsg.lifo = pbsg.priorLifo = []
-              if (pbsg_Rebuild(pbsg)) {
-                pruneOrphanedDevices(pbsg)
-                ciPbsg(pbsg)
-              }
+              pbsg_Rebuild(pbsg)
+              pruneOrphanedDevices(pbsg)
+              ciPbsg(pbsg)
             }
           } else {
             logError('processCommandQueue', ["Command: ${b('updateSettings')}",
@@ -285,22 +275,27 @@ void processCommandQueue(Map pbsg) {
         case 'parse':
           // Externally-supplied alternative to settings.
           Map config = settings.findAll { k, v -> (k) }  //  Copies settings
+          logTrace('processCommandQueue', ["Command: ${b('parse')}",
+            "config (before fromJson): ${bMap(config)}"
+          ])
           config << fromJson(command.value)              //  Revise some keys
           logTrace('processCommandQueue', ["Command: ${b('parse')}",
-            "config: ${bMap(config)}"
+            "config (after fromJson): ${bMap(config)}"
           ])
           if (config) {
             if (assertHealthySettings(config) == 'ALTERED') {
               // Reset PBSG keys and rebuild
               atomicState.remove('requestQueue')
               atomicState.remove('locked')
-              inspectAtomicState('processCommandQueue', '296')
+              inspectAtomicState('processCommandQueue', '287')
               pbsg.active = pbsg.priorActive = null
               pbsg.lifo = pbsg.priorLifo = []
-              if (pbsg_Rebuild(pbsg)) {
-                pruneOrphanedDevices(pbsg)
-                ciPbsg(pbsg)
-              }
+              logTrace('processCommandQueue', ["Command: ${b('parse')}",
+                "pbsg (before rebuild): ${bMap(pbsg)}"
+              ])
+              pbsg_Rebuild(pbsg)
+              pruneOrphanedDevices(pbsg)
+              ciPbsg(pbsg)
             }
           } else {
             logError('processCommandQueue', ["Command: ${b('parse')}",
@@ -520,9 +515,11 @@ Integer buttonNameToPushed(String button) {
 void parse(ArrayList commands) {
   atomicState.remove('activeCO')
   atomicState.remove('requestQueue')
-  inspectAtomicState('parse', '523')
+  inspectAtomicState('parse(ArrayList)', '#516')
+  logTrace('parse(ArrayList)', "commands: ${commands}")
   // Accepts an ArrayList of high-level commands.
   commands.each { command ->
+  logTrace('parse(ArrayList)', "command (loop): ${command}")
     // Some commands are added to the atomicState.requestQueue.
     // The test commands (which simulate externally-driven VSW state changes)
     // are forwarded to the appropriate VSW.
@@ -534,10 +531,10 @@ void parse(ArrayList commands) {
     } else if (['testVswOn', 'testVswOff', 'testVswPush'].contains(command.name)) {
       DevW d = getVswForButton(command.value)
       String operation = command.name.substring(7)
-      logTrace('parse', "Performing ${b(operation)} on ${b(d.getDeviceNetworkId())}")
+      logTrace('parse(ArrayList)', "Performing ${b(operation)} on ${b(d.getDeviceNetworkId())}")
       d."${operation}"
     } else {
-      logWarn('parse', "Unsupported command: ${bMap(command)}")
+      logWarn('parse(ArrayList)', "Unsupported command: ${bMap(command)}")
     }
   }
 }
@@ -584,8 +581,9 @@ String currentSettingsHtml() {
   ].join('<br/>')
 }
 
-Boolean pbsg_Rebuild(Map pbsg) {
-  inspectAtomicState('pbsg_Rebuild', '585')
+void pbsg_Rebuild(Map pbsg) {
+  inspectAtomicState('pbsg_Rebuild', '600')
+  logTrace('pbsg_Rebuild at start', "pbsg: ${pbsg}")
   // Return true if rebuild is successful.
   ArrayList buttonsList = atomicState.buttonsList
   buttonsList.each { button ->
@@ -600,6 +598,7 @@ Boolean pbsg_Rebuild(Map pbsg) {
   if (!pbsg.active && settings.dflt && settings.dflt != 'not_applicable') {
     pbsg_EnforceDefault(pbsg)
   }
+  logTrace('pbsg_Rebuild at end', "pbsg: ${pbsg}")
 }
 
 void pruneOrphanedDevices(Map pbsg) {
@@ -773,7 +772,7 @@ ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
       "Creating VswWithToggle instance: ${b(dni)}"
     )
     d = addChildDevice(
-      'wesmc',               // namespace
+      'WesMC',               // namespace
       'VswWithToggle',       // typeName
       dni,                   // Device Network Identifier (<pbsgName>_<button>)
       [

@@ -17,7 +17,7 @@
 //   Unicode 2192 → RIGHTWARDS ARROW
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include wesmc.lUtils
+#include WesMC.lUtils
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -29,7 +29,7 @@ import java.lang.Object as Object
 
 definition (
   name: 'TestBed1',
-  namespace: 'wesmc',
+  namespace: 'WesMC',
   author: 'Wesley M. Conner',
   description: 'TestBed1',
   singleInstance: true,
