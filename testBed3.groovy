@@ -29,8 +29,24 @@ import java.lang.Object as Object
 
 import groovy.transform.Field
 import java.util.concurrent.SynchronousQueue
+import java.time.*
+import java.time.Duration
 
 @Field static SynchronousQueue<Map> q = [:]
+//@Field static SimpleDateFormat sdf = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss.mmm")
+
+//import java.text.SimpleDateFormat
+//String newVersion() {
+//  //SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss.mmm")
+//  return sdf.format(new Date())
+//}
+
+//Long dateStringToDate(String s) {
+//  //SimpleDateFormat sdf = new SimpleDateFormat('YYYY-MM-DD-HH:mm:ss.mmm')
+//  return sdf.parse("YYYY-MM-DD-HH:mm:ss.mmm", cmd.ref)
+//}
+
+
 
 definition (
   name: 'TestBed3',
@@ -55,7 +71,27 @@ Map TestBed3() {
   ) {
     app.updateLabel("TestBed3 (${app.id})")
     section{
-      paragraph 'thread test'
+      paragraph h1('ISO8601 Date Tests')
+      Instant tOut1 = java.time.Instant.now()
+      Instant tIn1 = Instant.parse('2024-07-05T17:37:50.371291Z')
+      Long durationMs1 = Duration.between(tIn1, tOut1).toMillis();
+      paragraph "in: ${tIn1}, out: ${tOut1}, duration: ${durationMs1} ms"
+
+      Instant tIn2 = java.time.Instant.now()
+      pauseExecution(150)
+      Instant tOut2 = java.time.Instant.now()
+      Long durationMs2 = Duration.between(tIn2, tOut2).toMillis();
+      paragraph "in: ${tIn2}, out: ${tOut2}, duration: ${durationMs2} ms"
+
+      //SimpleDateFormat sdf = new SimpleDateFormat("YYYYMMdd") //_HH:mm:ss.mmm")
+      //paragraph "sdf: ${sdf}"
+      //Date d = new Date()
+      //paragraph "d: ${d}"
+      //String ds = sdf.format(d)
+      //paragraph "ds: ${ds}"
+      //Date d2 = sdf.parse(ds)
+      //paragraph "d2: ${d2}"
+      paragraph h1('Thread Test')
       input( name: 'x',
         title: "${b('Enter value for x')}",
         type: 'text',
