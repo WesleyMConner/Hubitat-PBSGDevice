@@ -63,14 +63,12 @@ Map TestBed3() {
       Long durationMs1 = Duration.between(tIn1, tOut1).toMillis();
       paragraph "in: ${tIn1}, out: ${tOut1}, duration: ${durationMs1} ms"
       paragraph "duration: ${durationMs1/1000} s"
-
       Instant tIn2 = java.time.Instant.now()
       pauseExecution(150)
       Instant tOut2 = java.time.Instant.now()
       Long durationMs2 = Duration.between(tIn2, tOut2).toMillis();
       paragraph "in: ${tIn2}, out: ${tOut2}, duration: ${durationMs2} ms"
       paragraph "duration: ${durationMs2/1000} s"
-
       paragraph h1('Click Done to begin Thread Test')
       paragraph i('Review test output in Hubitat logs.')
     }
@@ -78,62 +76,44 @@ Map TestBed3() {
 }
 
 void producer(Map parms) {
-  logInfo('producer', "parms: ${bMap(parms)}")
   ArrayList log = ['']
-  // logInfo('producer',
-  //   "${parms.producer} has range: ${parms.range} (${getObjectClassName(parms.range)})"
-  // )
   ArrayList cmds = parms.range.collect { e ->
-    [name: parms.name, value: "${e}", ref: "${java.time.Instant.now()}"]
+    [name: parms.name, value: e, tIn: "${java.time.Instant.now()}"]
   }
-  //logInfo('producer', "cmds: ${cmds}")
-  cmds.each{ command ->
-    pauseExecution(parms.pause)
-    q.put(command)
-    log << command
-  }
-  logInfo('producer', log)
+  cmds.each{ command -> q.put(command) }
 }
 
-void producer1(Map parms) {
-  parms << [producer: 'producer1']
-  producer(parms)
-}
-
-void producer2(Map parms) {
-  parms << [producer: 'producer2']
-  producer(parms)
-}
-
-void producer3(Map parms) {
-  parms << [producer: 'producer3']
-  producer(parms)
-}
+// There can only be one runInMillis() per fn; so, wrap producer().
+void producer1(Map parms) { producer(parms << [producer: 'producer1']) }
+void producer2(Map parms) { producer(parms << [producer: 'producer2']) }
+void producer3(Map parms) { producer(parms << [producer: 'producer3']) }
 
 void consumer(Map parms) {
-  logInfo('consumer', "parms: ${bMap(parms)}")
-  ArrayList log = ['']
-  ArrayList range = 1..75  // Tactically, limit looping to 75
-  range.each { e ->
+  logInfo('consumer', 'Starting a forever loop.')
+  while(true) {
     Map cmd = q.take()
     Instant tOut = java.time.Instant.now()
-    Instant tIn = Instant.parse(cmd.ref)
+    Instant tIn = Instant.parse(cmd.tIn)
     Long qDuration = Duration.between(tIn, tOut).toMillis();
-    log << [ ageInMs: qDuration, *:cmd ]
+    logInfo(
+      'consumer',
+      "Received ${bMap([ name: cmd.name, value: cmd.value, ageInMs: qDuration ])}"
+    )
   }
-  logInfo('consumer', log)
 }
+
 void installed() {
   logInfo('installed', 'Creating queue ...')
   q = new SynchronousQueue<Map>()
   logInfo('installed', 'Queue created.')
-  runInMillis(1000, 'consumer', [data: [ref: "Single Consumer"]])
+  runInMillis(500, 'consumer', [data: [ref: "Single Consumer"]])
   logInfo('installed', 'Consumer thread requested.')
-  Map args1 = [ range: 1..30, name: 'alpha', pause: 150 ]
-  Map args2 = [ range: 31..60, name: 'beta', pause: 200 ]
-  Map args3 = [ range: 61..75, name: 'gamma', pause: 175 ]
-  runInMillis(1000, 'producer1', [data: args1])
-  runInMillis(1000, 'producer2', [data: args2])
-  runInMillis(1000, 'producer3', [data: args3])
+  // Throw stuff at the consumer and see what happens.
+  Map args1 = [ range: 1..30, name: 'alpha']
+  Map args2 = [ range: 31..60, name: 'beta']
+  Map args3 = [ range: 61..75, name: 'gamma']
+  runInMillis(500, 'producer1', [data: args1])
+  runInMillis(500, 'producer2', [data: args2])
+  runInMillis(500, 'producer3', [data: args3])
   logInfo('installed', 'Producer thread requested')
 }
