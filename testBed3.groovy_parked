@@ -1,0 +1,146 @@
+// ---------------------------------------------------------------------------------
+// T E S T B E D 3
+//
+// Copyright (C) 2023-Present Wesley M. Conner
+//
+// LICENSE
+// Licensed under the Apache License, Version 2.0 (aka Apache-2.0, the
+// "License"), see http://www.apache.org/licenses/LICENSE-2.0. You may
+// not use this file except in compliance with the License. Unless
+// required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+// implied.
+// ---------------------------------------------------------------------------------
+// For reference:
+//   Unicode 2190 ← LEFTWARDS ARROW
+//   Unicode 2192 → RIGHTWARDS ARROW
+
+// The Groovy Linter generates NglParseError on Hubitat #include !!!
+#include WesMC.lUtils
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.InstalledAppWrapper as InstAppW
+import com.hubitat.hub.domain.Event as Event
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import java.lang.Math as Math
+import java.lang.Object as Object
+
+import groovy.transform.Field
+import java.text.SimpleDateFormat
+import java.util.concurrent.SynchronousQueue
+//import groovy.time.TimeCategory
+//import java.time.*
+//import java.time.Duration
+
+@Field static SynchronousQueue<Map> q = [:]
+
+definition (
+  name: 'TestBed3',
+  namespace: 'WesMC',
+  author: 'Wesley M. Conner',
+  description: 'TestBed3',
+  singleInstance: true,
+  iconUrl: '',
+  iconX2Url: ''
+)
+
+preferences {
+  page(name: 'TestBed3')
+}
+
+Map TestBed3() {
+  return dynamicPage(
+    name: 'TestBed3',
+    title: 'TestBed3',
+    install: true,
+    uninstall: true
+  ) {
+    app.updateLabel("TestBed3 (${app.id})")
+    section{
+      paragraph h1('Thread Test')
+    }
+  }
+}
+
+void consumer(Map parms) {
+  logInfo('consumer', "parms: ${bMap(parms)}")
+  ArrayList log = ['']
+  ArrayList range = 1..75  // Tactically, limit looping to 75
+  range.each { e ->
+    logInfo('consumer', "At #${e}")
+    Map cmd = q.take()
+    //SimpleDateFormat sdf = new SimpleDateFormat('YYYY-MM-DD-HH:mm:ss.mmm')
+    //Date tIn = sdf.parse("YYYY-MM-DD-HH:mm:ss.mmm", cmd.ref)
+    //Date tOut = newVersion()
+    //Integer msDiff = Math.abs(tOut.getTime() - tIn.getTime())
+    log << [
+      value: cmd.value,
+      e: "#${e}}",
+      //duration: "${msDiff} ms",
+      //tIn: tIn,
+      //tOut: tOut,
+      name: cmd.name,
+      value: cmd.value,
+      tInRef: cmd.ref
+    ]
+  }
+  logInfo('consumer', log)
+}
+
+void producer(Map parms) {
+  logInfo('producer', "parms: ${bMap(parms)}")
+  ArrayList log = ['']
+  // logInfo('producer',
+  //   "${parms.producer} has range: ${parms.range} (${getObjectClassName(parms.range)})"
+  // )
+  ArrayList cmds = parms.range.collect { e ->
+    [name: parms.name, value: "${e}", ref: newVersion()]
+  }
+  logInfo('producer', "cmds: ${cmds}")
+  cmds.each{ command ->
+    pauseExecution(parms.pause)
+    String ts = newVersion()
+    q.put(command)
+    log << ([ts: ts] << command)
+  }
+  logInfo('producer', log)
+}
+
+/*
+void producer1(Map parms) {
+  logInfo('producer1', 'in')
+  parms << [producer: 'producer1']
+  producer(parms)
+}
+void producer2(Map parms) {
+  parms << [producer: 'producer2']
+  producer(parms)
+}
+void producer3(Map parms) {
+  parms << [producer: 'producer3']
+  producer(parms)
+}
+*/
+
+void installed() {
+  try {
+    logInfo('installed', 'before q creation')
+    q = new SynchronousQueue<Map>()
+    logInfo('installed', 'Starting a single command consumer')
+    runInMillis(1000, 'consumer', [data: [ref: "Single Consumer"]])
+    logInfo('installed', 'Starting three command producers')
+    Map args1 = [ producer: 'A', range: 1..30, name: 'alpha', pause: 150 ]
+//    Map args2 = [ producer: 'B', range: 31..60, name: 'beta', pause: 200 ]
+//    Map args3 = [ producer: 'C', range: 61..75, name: 'gamma', pause: 175 ]
+    runInMillis(1000, 'producer', [data: args1])
+//    runInMillis(100, 'producer2', [data: args2])
+//    runInMillis(100, 'producer3', [data: args3])
+    logInfo('installed', 'producers launched')
+    //pauseExecution(10000)
+    //logInfo('installed', 'after 10s pause')
+  } catch (Exception ex) {
+    paragraph "Exception: ${ex.message}"
+  }
+}
