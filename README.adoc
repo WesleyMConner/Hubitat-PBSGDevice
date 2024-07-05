@@ -1,15 +1,27 @@
+:table-caption!:
 = PushButton Switch Group (PGSG)
 
-IMPORTANT:: When PBSG leverages sendEvent(), the `descriptionText` field may
-include "fancy labels" from wesmc.lUtils. The relevant HTML can be removed using `String stripFancy(String html)`, which is also found in wesmc.lUtils.
+A virtual *PushButtonSwitchGroup* (*PBSG*) device:
 
+* Behaves like a keypad with multiple buttons, where:
+** Only one button can be active at any time.
+** An optional *default button* is activated if no other button is active.
+* Each button has a corresponding *VswWithToggle* child devices.
+* The state of the PBSG and its Child devices is continuously reconciled.
+** PBSG methods include `activate(button)`, `deactivate(button)`, `push(buttonNumber)`.
+** Child devices support `on()`, `off()` and `push()` | `toggle()`.
+
+== PARKED
+
+ // Notes:
+ //   - getObjectClassName(Object obj)
 
 
 == What is a PBSG?
 
 A PBSG is a Hubitat-compatible virtual device where ...
 
-### The client provides ...
+=== The client provides ...
 
 buttons `(required)`::
 A list of button names.
@@ -17,7 +29,7 @@ A list of button names.
 defaultButton `(optional)`::
 A button (from the buttons list) that becomes active if no other PBSG button is active.
 
-### The virtual device ensures...
+=== The virtual device ensures...
 
 * Only one button is active at any time.
 * The defaultButton (if specified) is activated when no other button is active.
@@ -25,14 +37,14 @@ A button (from the buttons list) that becomes active if no other PBSG button is 
 * Child VSW state is updated when the PBSG state changes.
 * PBSG state is updated when child VSWs are turned on or off.
 
-### Advanced device features include ...
+=== Advanced device features include ...
 
 * Integration with LUX sensors
 * Integration with Motion sensors
 * A companion demonstration application that illustrates device creation AND facilitates automatically-generated test scripts.
 * A custom dashboard cell (FUTURE)
 
-## Why use a PBSG?
+== Why use a PBSG?
 
 * A PBSG realizes a mutually-exclusive collection of buttons and corresponding switches.
 * Use cases include: Managing Hubitat modes, Managing per-room scenes, etc.
@@ -122,42 +134,68 @@ state|atomicState.
 
 == OTHER STUFF
 
-```
-// OVERVIEW
-//   Conceptually, a PBSG has:
-//     buttons - An ArrayList of all the buttons managed by the PBSG
-//      active - The button that is currently 'on'
-//               (can be null if there is no dflt button)
-//        dflt - The button that is turned 'on' if active becomes null
-//               (can be 'not_applicable')
-//        lifo - The list of 'off' buttons where the most recently
-//               turned off button is the "last in" - facilitating
-//               the "activateLastActive" command.
-//
-//   Subscribable Events
-//     PBSG state (issued for any state change):
-//       [
-//         == MINIMAL/COMPREHENSIVE SUMMARY OF STATE
-//                     active: String or null  - 'on' button
-//                       lifo: ArrayList       - 'off' buttons
-//                       dflt: String or null  - 'dflt' button
-//         == FOR `PushableButton` CAPABILITY
-//            numberOfButtons: Integer         - N
-//                     pushed: Integer         - Position 1..N
-//         == FOR CONVENIENCE
-//                    buttons: ArrayList       - 'all' buttons
-//           buttonToPosition: Map             - button name → 1..N
-//                    display: String          - Log-friendly state
-//       ]
-//     PushableButton (issued when cited fields change):
-//       [
-//            numberOfButtons: Integer         - N
-//                     pushed: Integer         - Position 1..N
-//       ]
-//
-//   VERY IMPORTANT
-//     The ArrayList implementation of "lifo" is inverted !!!
-//       - push() is expected to PREPEND an item which pop() retrieves
-//       - Instead push() APPENDS an item which pop() retrieves
-//     The 'display' String provides a visual summary active & lifo
-```
+=== OVERVIEW
+.Conceptually, a PBSG has:
+[width="100%", frame="none", grid="none", cols=">15h,<85"]
+|===
+|buttons |An ArrayList of all the buttons managed by the PBSG
+|active |The button that is currently 'on' +
+(can be null if there is no dflt button)
+|dflt |The button that is turned 'on' if active becomes null +
+(can be 'not_applicable')
+|lifo |
+The list of 'off' buttons where the most recently +
+turned off button is the "last in" - facilitating the "activateLastActive" command.
+|===
+
+.Subscribable Events
+----
+     PBSG state (issued for any state change):
+       [
+         == MINIMAL/COMPREHENSIVE SUMMARY OF STATE
+                     active: String or null  - 'on' button
+                       lifo: ArrayList       - 'off' buttons
+                       dflt: String or null  - 'dflt' button
+         == FOR `PushableButton` CAPABILITY
+            numberOfButtons: Integer         - N
+                     pushed: Integer         - Position 1..N
+         == FOR CONVENIENCE
+                    buttons: ArrayList       - 'all' buttons
+           buttonToPosition: Map             - button name → 1..N
+                    display: String          - Log-friendly state
+       ]
+     PushableButton (issued when cited fields change):
+       [
+            numberOfButtons: Integer         - N
+                     pushed: Integer         - Position 1..N
+       ]
+----
+
+.VERY IMPORTANT
+----
+     The ArrayList implementation of "lifo" is inverted !!!
+       - push() is expected to PREPEND an item which pop() retrieves
+       - Instead push() APPENDS an item which pop() retrieves
+     The 'display' String provides a visual summary active & lifo
+----
+
+== USAGE OF CONCURRENT HASH MAP
+
+=== Competition for PBSG static data
+* Manual update via Hubitat UI
+* Programmatic update via config()
+
+=== Competition for PBSG dynamic data
+* Requests on the PBSG itself (from the parent, from events)
+* Actions on the VSWs (fielded by the parent)
+
+=== Reboot Challenges
+* No entries survive a hub reboot; so, state must be rebuilt.
+* Each PBSG has a Concurrent State Map (csm) stored in perPbsgState
+at key device.idAsLong.
+** Concurrency extends to operations on this inner Map.
+** To abbreviate 'concurrentState', 'ccs' is used.
+** Treatment wrt the following is TBD:
+
+NOTE: The ConcurrentHashMap `perPbsgState` is used in lieu of `state`
+or `atomicState`.

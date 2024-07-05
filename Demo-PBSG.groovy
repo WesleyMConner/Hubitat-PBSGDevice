@@ -1,19 +1,21 @@
-// ---------------------------------------------------------------------------------
-// D E M O   P B S G
-//
-// Copyright (C) 2023-Present Wesley M. Conner
-//
-// LICENSE
-// Licensed under the Apache License, Version 2.0 (aka Apache-2.0, the
-// "License"), see http://www.apache.org/licenses/LICENSE-2.0. You may
-// not use this file except in compliance with the License. Unless
-// required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-// implied.
-// ---------------------------------------------------------------------------------
-// The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include WesMC.lUtils  // Requires the following imports.
+/* D E M O   P B S G
+ *
+ * Copyright (C) 2023-Present Wesley M. Conner
+ *
+ * LICENSE
+ * Licensed under the Apache License, Version 2.0 (aka Apache-2.0, the
+ * "License"), see http://www.apache.org/licenses/LICENSE-2.0. You may
+ * not use this file except in compliance with the License. Unless
+ * required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied.
+ */
+
+//// WesMC.lUtils
+////   - The imports below support the methods in this library.
+////   - Groovy Linter generates NglParseError due to the Hubitat #include.
+#include WesMC.lUtils
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -59,7 +61,8 @@ void handle_pushed(Event e) {
 
 void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
-    Map pbsg = fromJson(e.value)
+    //Map pbsg = fromJson(e.value)
+    Map pbsg = parseJson(e.value)
     logInfo('handle_jsonPbsg',
       "pbsg = <br/>>${bMap(pbsg)}< <br/>>(${e.descriptionText}) <br/>>per ${eventSender(e)}"
     )
@@ -77,17 +80,6 @@ void handle_active(Event e) {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
   }
 }
-
-//----> void handle_jsonLifo(Event e) {
-//---->   if (e.name == 'jsonLifo') {
-//---->     ArrayList lifo = fromJson(e.value)
-//---->     logInfo('handle_jsonLifo',
-//---->       "lifo = ${bList(lifo)} (${e.descriptionText}) per ${eventSender(e)}"
-//---->     )
-//---->   } else {
-//---->     logError('handle_jsonLifo', "Unexpected event: ${eventDetails(e)}")
-//---->   }
-//----> }
 
 //// SOLICIT DATA FOR ONE OR MORE PBSG INSTANCES
 
@@ -243,9 +235,15 @@ ArrayList getTestSequence(String pbsgName) {
     String settingsKey = "${pbsgName}_testSequence"
     String value = settings."${settingsKey}"
     if (value) {
-      result = fromJson(value)
+      //result = fromJson(value)
+      result = parseJson(value)
     } else {
-      logError('getTestSequence#D', 'Encountered null value at key')
+      logError('getTestSequence#D', ['',
+        "pbsgName: ${pbsgName}",
+        "settingsKey: ${settingsKey}",
+        "value: ${value}",
+        'Encountered null value at key'
+      ])
     }
   } else {
     logError('getTestSequence#E', 'Encountered null settings')
@@ -260,8 +258,8 @@ ArrayList getTestActions(String pbsgName) {
   ArrayList buttons = getButtonNames("${pbsgName}_")
   ArrayList testActions = new ArrayList()
   buttons.each{ b ->
-    testActions << "${b}_ButtonOn"
-    testActions << "${b}_ButtonOff"
+    testActions << "${b}_Activate"
+    testActions << "${b}_Deactivate"
     testActions << "${b}_VswOn"
     testActions << "${b}_VswOff"
     testActions << "${b}_VswPush"
@@ -286,41 +284,6 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   solicitNextAction(pbsgName)
   // Present the latest Test Squence Json (for settings preservation)
   solicitTestSequence(testSequenceJson, pbsgName)
-}
-
-void configPbsgUsingParse(ChildDevW pbsg) {
-  // Per 'pbsg.groovy', there are two facilities for configuring a PBSG:
-  //   (1) MANUALLY: Using the Hubitat GUI's device drilldown page.
-  //   (2) PROGRAMMATICALLY: Using the PBSG's String json) method.
-  // This method demonstrates programatic configuration. It collects settings
-  // solicited by 'page1_CreatePBSGs' into a Map. Then, passes a
-  // JSON representation of the Map to the PBSG's parse(..) method.
-  String pbsgName = pbsg.getLabel()
-  if (pbsgName) {
-    String prefix = "${pbsgName}_"
-    Map prefs = [
-      buttons: getButtonNames(prefix).join(' '),  // ArrayList->StringvswToButtonName
-      dflt: defaultButton(prefix),
-      instType: 'pbsg',
-      logLevel: 'TRACE',     // (low) TRACE, DEBUG, INFO, WARN, ERROR' (high)
-      logVswActivity: true   // (low) TRACE, DEBUG, INFO, WARN, ERROR' (high)
-    ]
-    String jsonPrefs = toJson(prefs)
-    logWarn('configPbsgUsingParse', ["Calling ${devHued(pbsg)}.parse(...)",
-      "prefs: ${bMap(prefs)}",
-      "jsonPrefs: ${jsonPrefs}",
-      "&nbsp;&nbsp;Current parameter ${b("logLevel: 'TRACE'")} provides copious logging",
-      "&nbsp;&nbsp;Once flows are understood, ${b("logLevel: 'INFO'")} reduces logging"
-    ], '<br/>')
-    pbsg.parse([[                        // parse() expects an ArrayList of Maps
-      name: 'config',
-      value: jsonPrefs,
-      descriptionText: "Config PBSG using JSON",
-    ]])
-    //pause(3000)
-  } else {
-    logError('configPbsgUsingParse', 'Argument "pbsgName" was null')
-  }
 }
 
 //// DEFINE THREE DEMO DATA COLLECTION PAGES
@@ -461,7 +424,7 @@ void initialize() {
   //   - The PBSG configuration Map is subsequently expanded to become a
   //     a PBSG instance.
   //   - Top-level Maps in state are efficiently processed with the
-  //     atomicState() and atomicState.updateMapValue(...).
+  //     atomicState() and getCCS().updateMapValue(...).
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
@@ -473,97 +436,73 @@ void initialize() {
     //           dflt: ...,   // The default button name or null
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
-    logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
-    ChildDevW pbsg = getOrCreatePBSG(pbsgName)
-    subscribeHandler(pbsg, 'numberOfButtons')
-    subscribeHandler(pbsg, 'pushed')
-    subscribeHandler(pbsg, 'jsonPbsg')
-    subscribeHandler(pbsg, 'active')
-    //----> subscribeHandler(pbsg, 'jsonLifo')
-    // Assemble solicited configure data (for the current PBSG) and use it to
-    // configure the current PBSG via 'pbsg.parse(String json)'.
-    logInfo('initialize', "Configuration and initialize PBSG ${pbsgName}")
-    configPbsgUsingParse(pbsg)
-    pbsg.inspectAtomicState('XYZ', 'After configPbsgUsingParse()')
-    // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
-    ArrayList testSeqList = getTestSequence(pbsgName)
-    logTrace(
-      'initialize',
-      "PBSG ${b(pbsgName)} Test Sequence, ${bList(testSeqList)}"
-    )
-    Integer actionCnt = testSeqList.size()
-    // Call the appropriate PBSG method per Test Action.
-    testSeqList?.eachWithIndex{ testAction, index ->
-      String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
-      logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
-      //-> if (testAction == 'Activate_last_active') {
-      //->   pbsg.activateLastActive()
-      //->   //pause(1000)
-      //-> } else {
+    if (pbsgName) {
+      logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
+      ChildDevW pbsg = getOrCreatePBSG(pbsgName)
+      subscribeHandler(pbsg, 'numberOfButtons')
+      subscribeHandler(pbsg, 'pushed')
+      subscribeHandler(pbsg, 'jsonPbsg')
+      subscribeHandler(pbsg, 'active')
+      //----> subscribeHandler(pbsg, 'jsonLifo')
+      // Assemble solicited configure data (for the current PBSG) and use it to
+      // configure the current PBSG via 'pbsg.parse(String json)'.
+      logInfo('initialize', "Configure PBSG ${pbsgName}")
+      String prefix = "${pbsgName}_"
+      Map prefs = [
+        buttons: getButtonNames(prefix).join(' '),
+        dflt: defaultButton(prefix),
+        instType: 'pbsg',
+        logLevel: 'TRACE',
+        logVswActivity: true
+      ]
+      String jsonPrefs = toJson(prefs)
+      pbsg.config(jsonPrefs, 'Config PBSG using JSON')
+      // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
+      ArrayList testSeqList = getTestSequence(pbsgName)
+      logTrace(
+        'initialize',
+        "PBSG ${b(pbsgName)} Test Sequence, ${bList(testSeqList)}"
+      )
+      Integer actionCnt = testSeqList.size()
+      // Call the appropriate PBSG method per Test Action.
+      testSeqList?.eachWithIndex{ testAction, index ->
+        String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
+        logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
           String action = tokenizedAction[1]
-          String description = "${index}: ${testAction}"
+          String reference = "${index}: ${testAction}"
           switch (action) {
-            case 'ButtonOn':
-              //pbsg.activate(target)
-              pbsg.parse([[              // parse() expects an ArrayList of Maps
-                name: 'activate',
-                value: "${target}",
-                descriptionText: description
-              ]])
-              //pause(1000)
+            case 'Activate':
+              pbsg.activate(target, reference)
               break
-            case 'ButtonOff':
-              //pbsg.deactivate(target)
-              pbsg.parse([[              // parse() expects an ArrayList of Maps
-                name: 'deactivate',
-                value: "${target}",
-                descriptionText: description
-              ]])
-              //pause(1000)
+            case 'Deactivate':
+              pbsg.deactivate(target, reference)
               break
+            /*
             case 'VswOn':
-              //pbsg.testVswOn(target)
-              pbsg.parse([[              // parse() expects an ArrayList of Maps
-                name: 'testVswOn',
-                value: target,
-                descriptionText: description
-              ]])
-              //pause(1000)
+              pbsg.testVswOn(target, reference)
               break
             case 'VswOff':
-              //pbsg.testVswOff(target)
-              pbsg.parse([[              // parse() expects an ArrayList of Maps
-                name: 'testVswOff',
-                value: target,
-                descriptionText: description
-              ]])
-              //pause(1000)
+              pbsg.testVswOff(target, reference)
               break
             case 'VswPush':
-              //pbsg.testVswPush(target)
-              pbsg.parse([[              // parse() expects an ArrayList of Maps
-                name: 'testVswPush',
-                value: target,
-                descriptionText: description
-              ]])
-              //pause(1000)
+              pbsg.testVswPush(target, reference)
               break
+            */
             default:
-              logError('initialize', [
-                'unexpected',
-                "testAction >${testAction}<",
-                "button >${button}<",
-                "action >${action}<",
-              ])
+              logError(
+                'initialize',
+                "Unknown action: ${action}, target: ${target}"
+              )
           }
         } else {
-          logError('initialize', "unexpected testAction >${testAction}<")
+          logError('initialize', "Unsuccessful tokenize of >${testAction}<")
         }
-      //-> }
-      pbsg.inspectAtomicState('XYZ', "Processed ${index}: ${testAction}")
+      }
+    } else {
+      logError('configPbsg', 'Argument "pbsgName" was null')
     }
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
@@ -582,8 +521,8 @@ void initialize() {
   }
   // At this point, the App could exit before the results of running the
   // tests have been seen by the handlers.
-  Integer maxLoops = 25
-  Integer sleepMs = 2000
+  Integer maxLoops = 10
+  Integer sleepMs = 1000
   Integer loopCounter = 0
   while (loopCounter++ < maxLoops) {
     pauseExecution(sleepMs)

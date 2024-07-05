@@ -27,6 +27,8 @@ import groovy.json.JsonSlurper as JsonSlurper
 import java.lang.Math as Math
 import java.lang.Object as Object
 
+import java.text.SimpleDateFormat
+
 definition (
   name: 'TestBed1',
   namespace: 'WesMC',
@@ -49,20 +51,27 @@ Map TestBed1() {
   ) {
     app.updateLabel("TestBed1 (${app.id})")
     section{
+      SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss");
+      paragraph df.format(new Date())
       // Begin with an empty list.
       ArrayList x = []
       x.push('alpha')
       x.push('beta')
       x.push('gamma')
       x.push('delta')
+      //ArrayList l = ['one', 'two', 'three', 'four', 'five']
+      //paragraph "Find two: ${l.withIndex().find{ e, i -> (e == 'two')}[1]}"
+      //paragraph "Find five: ${l.withIndex().find{ e, i -> (e == 'five')}[1]}"
+      //paragraph "Find six: ${l.withIndex().find{ e, i -> (e == 'six')}[1]}"
+      try {
+        paragraph 'Before Error'
+        throw new Exception('XYZ')
+        paragraph 'After Error'
+      } catch (Exception ex) {
+        paragraph "Exception: ${ex.message}"
+      }
       paragraph "At 0: ${x.removeAt(0)}"
       paragraph "x: ${x}"
-      String s = "This is a test."
-      String sJson = toJson(s)
-      String s2 = fromJson(sJson)
-      paragraph "s: ${s}"
-      paragraph "sJson: ${sJson}"
-      paragraph "s2: ${s2}"
     }
     section {
       /*

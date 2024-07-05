@@ -53,7 +53,8 @@ Map TestBed3() {
       paragraph "${b('Json Encoding')}: ${x}"
 
       // RE-HYDRATE THE MAP IN ONE STEPS
-      Map m = fromJson(x)
+      //Map m = fromJson(x)
+      Map m = parseJson(x)
       paragraph "${b('Hydration')}: ${m}"
     }
   }

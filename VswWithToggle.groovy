@@ -41,46 +41,44 @@ metadata {
                                  // Commands: on(), off()
     capability "Momentary"       // Commands: push()
   }
-  preferences { /* FULLY-MANAGED BY PARENT DEVICE */ }
+  preferences { /* THIS DEVICE IS FULLY MANAGED BY THE PARENT DEVICE */ }
 }
 
-//// DEVICE LIFECYCLE METHODS
+// COMMANDS FOR ADVERTISED CAPABILITIES
 
-void installed() {
-  // Called when a bare device is first constructed.
+void on(String ref = null) {
+  if (parent.settings.logVswActivity) { logTrace('on', 'Received on()') }
+  parent.cmdQueue().offer([
+    name: 'Activate',
+    arg: parent.vswToButtonName(this.device),
+    ref: ref,
+    version: parent.csm().version
+  ], 2, SECONDS) || logError('off', 'Could not queue "Activate".')
 }
 
-void uninstalled() {
-  // Called on device tear down.
+void off(String ref = null) {
+  if (parent.settings.logVswActivity) { logTrace('on', 'Received off()') }
+  parent.cmdQueue().offer([
+    name: 'Deactivate',
+    arg: parent.vswToButtonName(this.device),
+    ref: ref,
+    version: parent.csm().version
+  ], 2, SECONDS) || logError('off', 'Could not queue "Deactivate".')
 }
 
-void updated() {
-  // Runs when save is clicked in the preferences section
+void push(String ref = null) {
+  if (parent.settings.logVswActivity) { logTrace('on', 'Received push()') }
+  parent.cmdQueue().offer([
+    name: 'Toggle',
+    arg: parent.vswToButtonName(this.device),
+    ref: ref,
+    version: parent.csm().version
+  ], 2, SECONDS) || logError('off', 'Could not queue "Toggle".')
 }
 
-//// METHODS FOR ADVERTISED CAPABILITIES
-////   - Parent queues and directs all execution and logging.
+// EXPECT PARENT TO MANIPULATE THIS DEVICE
 
-void on() {
-  String button = parent.vswToButtonName(this.device)
-  parent.addCommandToQueue("${activate}^${button}")
-}
-
-void off() {
-  String button = parent.vswToButtonName(this.device)
-  parent.addCommandToQueue("${deactivate}^${button}")
-}
-
-void push() {
-  // parent?.vswWithTogglePush(this.device)
-  String button = parent.vswToButtonName(this.device)
-  parent.addCommandToQueue("${toggle}^${button}")
-}
-
-//// ADDITIONAL STATE-CHANGING METHODS
-////   - The parent device directs all state changes via parse().
-
-void parse(ArrayList actions) {
+void parse(ARRAYLIST ACTIONS) {
   // This command expects actions (an ArrayList) of commands (Maps).
   // Each Map must be suitable for execution by sendEvent().
   //      +-----------------+-------------------------+
@@ -93,10 +91,16 @@ void parse(ArrayList actions) {
   // PROCESS THE LIST OF ACTIONS
   ArrayList allowedActions = ['switch']
   actions.each{ action ->
+    if (parent.settings.logVswActivity) {
+      logTrace('parse', "Received action: ${bMap(action)}")
+    }
     if (action?.name in allowedActions) { sendEvent(action) }
   }
 }
 
-//// UNUSED / UNSUPPORTED METHODS
-
-void parse(String) { }
+// NOT REQUIRED
+//   void installed() { }
+//   void uninstalled() { }
+//   void initialize() {}
+//   void updated() { }
+//   void parse(String) { }

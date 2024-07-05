@@ -1,0 +1,15 @@
+= Placeholder for Basic Device Stuff
+
+== Device Metadata
+
+[horizontal]
+Capability:: Short hand for one or more *Commands* and one or more *Attributes* that together implement some capability.
+
+Commands:: Device methods that are public (exposed to authorized *Apps | Devices*).
+
+Attributes:: Public run-time data associated with a device that is set and published using `device.sendEvent()` and read using `device.currentValue(...)`.
+
+Preferences:: Characterize properties of a device instance which are specified BEFORE the device is instantiated.
+
+WARNING: The Preference type `Enum` is static. Its options must be fixed and cannot be computed dynamically.
+

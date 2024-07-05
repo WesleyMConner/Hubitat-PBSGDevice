@@ -30,12 +30,11 @@ import groovy.transform.Field
 import java.text.SimpleDateFormat
 import java.time.ZonedDateTime
 import java.util.concurrent.ConcurrentHashMap
-//import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.SynchronousQueue
 
 @Field static ConcurrentHashMap<Long, Map> perPbsgState = [:]
 //@Field static ConcurrentHashMap<Long, String> perPbsgVersion = [:]
-//@Field static ConcurrentHashMap<Long, SynchronousQueue<Map>> perPbsgQueue = [:]
-@Field static ConcurrentHashMap<Long, ArrayList> perPbsgQueue = [:]
+@Field static ConcurrentHashMap<Long, SynchronousQueue<Map>> perPbsgQueue = [:]
 
 Map csm() {  // Get the PBSG's Concurrent State Map (csm)
   return perPbsgState[device.idAsLong]
@@ -50,7 +49,7 @@ String newVersion() {
   return df.format(new Date())
 }
 
-ArrayList cmdQueue() {
+SynchronousQueue<Map> cmdQueue() {
   return perPbsgQueue[device.idAsLong]
 }
 
@@ -175,7 +174,7 @@ void installed() {
   ]
   logInfo('installed', "perPbsgState: ${perPbsgState}")
   //perPbsgVersion[device.idAsLong] = newVersion()
-  perPbsgQueue[device.idAsLong] = [] //new SynchronousQueue(true)
+  perPbsgQueue[device.idAsLong] = new SynchronousQueue(true)
   logWarn('installed', [
     "Constructed ${devHued(device)}.",
     "Initial Concurrent State Map (csm): ${bMap(csm())}."
@@ -258,16 +257,14 @@ void config(String jsonPrefs, String ref = '') {
   //SynchronousQueue<Map> q = cmdQueue()
   //-> logTrace('config', "TEST: ${q != null}")
   //boolean result = q.offer(cmd, 2, SECONDS)
-  logTrace('config', "BEFORE queue add, q: ${cmdQueue()}")
-  cmdQueue() << [
+  logTrace('config', 'BEFORE put()')
+  cmdQueue().put([
     name: 'Config',
     arg: jsonPrefs,
     ref: ref,
     version: pbsg.version
-  ]
-  logTrace('config', "AFTER queue add, q: ${cmdQueue()}")
-  Map cmd = cmdQueue().pop()
-  logTrace('config', "AFTER queue pop, cmd: ${cmd}")
+  ])
+  logTrace('config', "AFTER put()")
 }
 
 void activate(String button, String ref = '') {

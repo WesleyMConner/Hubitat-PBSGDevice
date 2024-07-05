@@ -7,10 +7,15 @@ ignorePaths:
   - .vscode
 words:
   - alexa
+  - dflt
   - drilldown
   - groovylintrc
   - hubitat
   - pbsg
+  - prefs
   - pushable
   - sandboxed
+  - vsw
   - wesmc
+  - zigbee
+

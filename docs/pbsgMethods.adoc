@@ -1,0 +1,110 @@
+:table-caption!:
+:ref: footnote:[An optional "String ref" parameter exists on all public PBSG +
+methods. If provided, this string will be used as the descriptionText in +
+any related sendEvent() calls.]
+
+= PBSG Methods
+
+The following table provides a high-level overview of PBSG methods.
+
+NOTE: Device COMMANDS utilize positional parameters. +
+Other functions utilize named parameter syntax for readability. +
+*Example:* _doSomething(button: 'PoolPump', action: 'on')_ +
+See https://docs.groovy-lang.org/latest/html/documentation/#_named_parameters_2
+
+== State Management Methods
+
+[width="100%", frame="ends", grid="all", cols=">20,^22,<58"]
+|===
+^h|Name ^h|Arguments ^h|Description
+3+<|*IMPLEMENTED*
+|installed() |_n/a_ |Called when a bare device is first constructed. +
+- Creates the PBSG's initial state map in `perPbsgState`.
+|uninstalled() |_n/a_ |Called on device tear down. +
+- Removes the PBSG's entry in `perPbsgState`.
+|initialize() |_n/a_ |Called on hub startup. +
+- Repopulates the PBSG's entries in `perPbsgState` and `perPbsgVersion`.
+|updated() |_n/a_ |Called when *Save Preferences* is pushed in the Device GUI. +
+- If the available settings are sufficient, updates `perPbsgVersion`.
+3+<|*NOT APPLICABLE*
+|refresh() |_n/a_ |It is unclear what a `refresh()` would target on a PBSG.
+|configure() |_n/a_ |Typically called when *Zigbee \| Z-Wave* devices are paired. +
+Not applicable for a (virtual) PBSG.
+|===
+
+== Public PBSG Methods
+The following methods are exposed to *Authorized Apps | Devices*. +
+_Examples: The *App | Device* that owns the PBSG instance. Devices authorized via Hubitat's `input()` GUI method._
+
+
+[width="100%", frame="ends", grid="all", cols=">20,^22,<58"]
+|===
+^h|Name ^h|Arguments{ref} ^h|Description
+3+<|*UTILITY METHODS*
+|buttonNameToPushed |String buttonName, +
+ArrayList buttons |Returns the buttons position (1..N).
+3+<|*STATE ALTERING COMMANDS*
+|config |String jsonPrefs |Sets one or more preferences as a programmatic alternative to using Device GUI and *Save Preferences*. Expects a JSON-serialized Map with optional keys `buttons`, `dflt`, `instType`, `logLevel` and `logVswActivity`. +
+- If the available settings are sufficient, updates `perPbsgVersion`.
+|activate |String buttonName |Queues (exclusive) activation of the specified PBSG button.
+|deactivate |String buttonName |Queues deactivation of the specified PBSG button. +
+_Activates the default button if specified._
+|toggle |String buttonName |Queues toggle of the specified PBSG button. +
+_Activates if off. Deactivates if on._
+|push |Integer position |Toggles (activates \| deactivates) the button at position (1..N).
+3+<|*METHODS SIMULATING EXTERNAL ACTIVITY*
+|testVswOn |String buttonName |Invokes the corresponding VSW's 'on()' method. +
+[_The VSW queues a button activation command._]
+|testVswOff |String buttonName |Invokes the corresponding VSW's 'off()' method. +
+[_The VSW queues a button deactivation command._]
+|testVswPush |String buttonName |Invokes the corresponding VSW's 'push()' method. +
+[_The VSW queues a button toggle command._]
+3+<|*CHILD DEVICE METHODS*
+|on |_(optional ref)_ |Queues Activate for the corresponding button.
+|off |_(optional ref)_ |Queues Deactivate for the corresponding button.
+|push |_(optional ref)_ |Queues Toggle for the corresponding button.
+|parse |ArrayList actions |Calls sendEvent() for the provided list of actions.
+|===
+
+== Thread Management
+Multiple threads can alter the state of a PBSG::
+* Clients can invoke state-changing methods.
+* External parties can manipulate (turn on|off) child devices.
+
+Two global ConcurrentHashMaps facilitate cross-thread stability::
+* Map `perPbsgState[device.idAsLong]` houses PBSG state (in lieu of *state | atomicState*).
+* Integer `perPbsgVersion[device.idAsLong]` increments on PBSG structural changes.
+* Both `perPbsgState` and `perPbsgVersion` must be repopulated after a Hubitat reboot.
+
+Per PBSG a SynchronousQueue manages competing requests::
+* Multiple state changing inputs `put()` data into the "fair" queue, which ensures FIFO order.
+* A single consumer calls `take()` to consume requests and adjust state.
+** Enqueued requests capture the current PBSG version.
+** The consumer discards requests for a prior PBSG version.
+
+== Private PBSG Methods
+
+[width="100%", frame="ends", grid="all", cols=">20,^22,<58"]
+|===
+^h|Name ^h|Arguments ^h|Description
+|coPbsg |_n/a_ |tbd
+|pbsg_CoreKeysOnly |_n/a_ |tbd
+|ciPbsg |_n/a_ |tbd
+|processCommandQueue |_n/a_ |tbd
+|assertHealthySettings |_n/a_ |tbd
+|currentSettingsHtml |_n/a_ |tbd
+|pruneOrphanedDevices |_n/a_ |tbd
+|pbsg_ActivateButton |_n/a_ |tbd
+|pbsg_DeactivateButton |_n/a_ |tbd
+|pbsg_EnforceDefault |_n/a_ |tbd
+|buttonState |_n/a_ |tbd
+|pbsg_StateHtml |_n/a_ |tbd
+|pbsg_StateText |_n/a_ |tbd
+|getOrCreateVswWithToggle |_n/a_ |tbd
+|getButtonForVsw |_n/a_ |tbd
+|getVswForButton |_n/a_ |tbd
+3+<|*IMPLEMENTATION OF CHILD DEVICE FUNCTIONALITY*
+|turnOnVsw |DevW d |tbd
+|turnOffVsw |DevW d |tbd
+|toggleVsw |DevW d |tbd
+|===
