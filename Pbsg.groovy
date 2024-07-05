@@ -45,10 +45,11 @@ Map csm() {  // Get the PBSG's Concurrent State Map (csm)
 //  return perPbsgVersion[device.idAsLong]
 //}
 
-String newVersion() {
-  SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss");
-  return df.format(new Date())
-}
+// Prefer: java.time.Instant.now()
+//-> String newVersion() {
+//->   SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss");
+//->   return df.format(new Date())
+//-> }
 
 ArrayList cmdQueue() {
   return perPbsgQueue[device.idAsLong]
@@ -163,18 +164,17 @@ metadata {
 void installed() {
   // Called when a bare device is first constructed.
   perPbsgState[device.idAsLong] = [
-    // Update this whole Map (all of its keys) or nothing.
+    // NOTE: Update this whole Map atomically.
     // STRUCTURAL FIELDS
-    version: newVersion(),  // Version Timestamp .... String
-    buttonsList: [],        // All PBSG buttons ..... ArrayList
-    dflt: null,             // Default button ....... String | null
-    instType: 'pbsg',       // PBSG 'psuedo-class' .. String
+    version: java.time.Instant.now(),  // Version Timestamp .... String
+    buttonsList: [],                   // All PBSG buttons ..... ArrayList
+    dflt: null,                        // Default button ....... String | null
+    instType: 'pbsg',                  // PBSG 'psuedo-class' .. String
     // DYNAMIC FIELDS
-    active: null,           // Active button ........ String | null
-    lifo: []                // Inactive buttons ..... ArrayList
+    active: null,                      // Active button ........ String | null
+    lifo: []                           // Inactive buttons ..... ArrayList
   ]
   logInfo('installed', "perPbsgState: ${perPbsgState}")
-  //perPbsgVersion[device.idAsLong] = newVersion()
   perPbsgQueue[device.idAsLong] = [] //new SynchronousQueue(true)
   logWarn('installed', [
     "Constructed ${devHued(device)}.",
@@ -406,7 +406,7 @@ Map newPbsg(Map parms) {
       // Initialize the prospective Concurrent State Map (CSM) update in memory.
       newPbsg = [
         // STRUCTURAL FIELDS
-        version: newVersion(),
+        version: java.time.Instant.now(),
         buttonsList: buttonsList,
         dflt: dflt,
         instType: config.instType,

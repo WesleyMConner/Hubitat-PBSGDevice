@@ -108,7 +108,6 @@ void producer(Map parms) {
   logInfo('producer', log)
 }
 
-/*
 void producer1(Map parms) {
   logInfo('producer1', 'in')
   parms << [producer: 'producer1']
@@ -122,7 +121,6 @@ void producer3(Map parms) {
   parms << [producer: 'producer3']
   producer(parms)
 }
-*/
 
 void installed() {
   try {
@@ -132,14 +130,12 @@ void installed() {
     runInMillis(1000, 'consumer', [data: [ref: "Single Consumer"]])
     logInfo('installed', 'Starting three command producers')
     Map args1 = [ producer: 'A', range: 1..30, name: 'alpha', pause: 150 ]
-//    Map args2 = [ producer: 'B', range: 31..60, name: 'beta', pause: 200 ]
-//    Map args3 = [ producer: 'C', range: 61..75, name: 'gamma', pause: 175 ]
+    Map args2 = [ producer: 'B', range: 31..60, name: 'beta', pause: 200 ]
+    Map args3 = [ producer: 'C', range: 61..75, name: 'gamma', pause: 175 ]
     runInMillis(1000, 'producer', [data: args1])
-//    runInMillis(100, 'producer2', [data: args2])
-//    runInMillis(100, 'producer3', [data: args3])
+    runInMillis(1000, 'producer2', [data: args2])
+    runInMillis(1000, 'producer3', [data: args3])
     logInfo('installed', 'producers launched')
-    //pauseExecution(10000)
-    //logInfo('installed', 'after 10s pause')
   } catch (Exception ex) {
     paragraph "Exception: ${ex.message}"
   }

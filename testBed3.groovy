@@ -77,23 +77,6 @@ Map TestBed3() {
   }
 }
 
-/*
-def consumer(Map parms = [ref: 'DEFAULT']) {
-  logInfo('consumer', "before take, ref: ${parms.ref}")
-  Map rxcmd = q.take()
-  logInfo('consumer', "after take, rxcmd: ${rxcmd}")
-}
-*/
-
-/*
-def producer(Map parms = [ref: 'DEFAULT']) {
-  logInfo('producer', "before put, ref: ${parms.ref}")
-  Map txcmd = [a: 'one', b: 'two', c: 'three']
-  q.put(txcmd)
-  logInfo('installed', 'after put')
-}
-*/
-
 void producer(Map parms) {
   logInfo('producer', "parms: ${bMap(parms)}")
   ArrayList log = ['']
@@ -103,7 +86,7 @@ void producer(Map parms) {
   ArrayList cmds = parms.range.collect { e ->
     [name: parms.name, value: "${e}", ref: "${java.time.Instant.now()}"]
   }
-  logInfo('producer', "cmds: ${cmds}")
+  //logInfo('producer', "cmds: ${cmds}")
   cmds.each{ command ->
     pauseExecution(parms.pause)
     q.put(command)
@@ -112,17 +95,31 @@ void producer(Map parms) {
   logInfo('producer', log)
 }
 
+void producer1(Map parms) {
+  parms << [producer: 'producer1']
+  producer(parms)
+}
+
+void producer2(Map parms) {
+  parms << [producer: 'producer2']
+  producer(parms)
+}
+
+void producer3(Map parms) {
+  parms << [producer: 'producer3']
+  producer(parms)
+}
+
 void consumer(Map parms) {
   logInfo('consumer', "parms: ${bMap(parms)}")
   ArrayList log = ['']
-  ArrayList range = 1..30  // Tactically, limit looping to 75
+  ArrayList range = 1..75  // Tactically, limit looping to 75
   range.each { e ->
-    logInfo('consumer', "At #${e}")
     Map cmd = q.take()
     Instant tOut = java.time.Instant.now()
     Instant tIn = Instant.parse(cmd.ref)
     Long qDuration = Duration.between(tIn, tOut).toMillis();
-    log << [ queued: qDuration, *:cmd ]
+    log << [ ageInMs: qDuration, *:cmd ]
   }
   logInfo('consumer', log)
 }
@@ -132,7 +129,11 @@ void installed() {
   logInfo('installed', 'Queue created.')
   runInMillis(1000, 'consumer', [data: [ref: "Single Consumer"]])
   logInfo('installed', 'Consumer thread requested.')
-  Map args1 = [ producer: 'A', range: 1..30, name: 'alpha', pause: 150 ]
-  runInMillis(1000, 'producer', [data: args1])
+  Map args1 = [ range: 1..30, name: 'alpha', pause: 150 ]
+  Map args2 = [ range: 31..60, name: 'beta', pause: 200 ]
+  Map args3 = [ range: 61..75, name: 'gamma', pause: 175 ]
+  runInMillis(1000, 'producer1', [data: args1])
+  runInMillis(1000, 'producer2', [data: args2])
+  runInMillis(1000, 'producer3', [data: args3])
   logInfo('installed', 'Producer thread requested')
 }
