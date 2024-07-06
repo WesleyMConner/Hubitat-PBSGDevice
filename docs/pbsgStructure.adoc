@@ -26,6 +26,8 @@ Each PBSG has a *pbsgStateMap* with the following keys.
 === ConcurrentHashMap<Long, SynchronousQueue> QUEUE
 QUEUE `<k, v>` pairs: :: `<device.idAsLong, commandQueue>`
 
+WARNING: Hubitat's Groovy Sandbox DOES NOT allow `Thread.start {...}`. The Hubitat alternative, `runInMillis(...)`, appears to have limitations that appear to interfere with SynchronousQueue's `offer()`. The `VswWithToggle` devices rely on blocking `put()` calls for `on()`, `off()` and `push()`; so, could hang if the queue's consumer thread fails.
+
 .Each PbSG has a `commandQueue`, where:
 
 * A single thread is created to calls `take()` - extracting messages one at a time AND (if appropriate) updating the `pbsgStateMap`.

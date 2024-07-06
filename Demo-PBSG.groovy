@@ -97,6 +97,7 @@ void solicitPbsgNames() {
       '- The names will be used to create PBSG devices',
       '- Use ⏎ to save your entry '
     ].join('<br/>'),
+    defaultValue: 'weekdays',  // HARDWIRE TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: true
@@ -117,6 +118,7 @@ void solicitButtonNames(String prefix) {
   input(
     name: "${prefix}buttons",
     title: h3(header),
+    defaultValue: 'mon tue wed thu fri',  // HARDWIRE TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: dynamic
@@ -141,7 +143,8 @@ void solicitDefaultButton(String prefix) {
     type: 'enum',
     multiple: false,
     options: [*getButtonNames(prefix), 'not_applicable'],
-    defaultValue: defaultButton(prefix) ?: 'not_applicable',
+    defaultValue: 'thu',  // HARDWIRE TEMPORARILY
+    //defaultValue: defaultButton(prefix) ?: 'not_applicable',
     submitOnChange: isDynamic(),
     required: true
   )
@@ -216,7 +219,8 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
     name: "${pbsgName}_testSequence",
     title: h3(header),
     type: 'textarea',
-    defaultValue: testSequenceJson,
+    defaultValue: '["mon_Activate","wed_Activate","wed_Deactivate"]',  // HARDWIRE TEMPORARILY
+    //defaultValue: testSequenceJson,
     required: true,
     width: 9,
     submitOnChange: isDynamic()
@@ -238,15 +242,10 @@ ArrayList getTestSequence(String pbsgName) {
       //result = fromJson(value)
       result = parseJson(value)
     } else {
-      logError('getTestSequence#D', ['',
-        "pbsgName: ${pbsgName}",
-        "settingsKey: ${settingsKey}",
-        "value: ${value}",
-        'Encountered null value at key'
-      ])
+      logWarn('getTestSequence', "No setting ${settingsKey} yet")
     }
   } else {
-    logError('getTestSequence#E', 'Encountered null settings')
+    logWarn('getTestSequence', 'Preferences (settings) are not yet available.')
   }
   return result
 }
@@ -365,16 +364,19 @@ Map page3_TestSequences() {
 }
 
 void installed() {
+  // Called when a bare device is first constructed.
   unsubscribe()
-  initialize()
+  exercisePbsg()
 }
 
 void updated() {
-  unsubscribe()
-  initialize()
+  // Called when a human uses the Hubitat GUI's Device drilldown page to edit
+  // preferences (aka settings) AND presses 'Save Preferences'.  unsubscribe()
+  exercisePbsg()
 }
 
 void uninstalled() {
+  // Called on device tear down.
 }
 
 ChildDevW getOrCreatePBSG(String pbsgName) {
@@ -417,6 +419,11 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
 //}
 
 void initialize() {
+  // Called on hub startup (per capability "Initialize").
+  exercisePbsg()
+}
+
+void exercisePbsg() {
   setLogLevel('TRACE')  // Use 'INFO' to reduce logging.
   // For each pbsgName:
   //   - Process the user-provided 'settings' into a PBSG configuration Map.
@@ -437,7 +444,7 @@ void initialize() {
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
     if (pbsgName) {
-      logTrace('initialize', "Creating pbsg ${b(pbsgName)}.")
+      logTrace('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
       ChildDevW pbsg = getOrCreatePBSG(pbsgName)
       subscribeHandler(pbsg, 'numberOfButtons')
       subscribeHandler(pbsg, 'pushed')
@@ -446,7 +453,7 @@ void initialize() {
       //----> subscribeHandler(pbsg, 'jsonLifo')
       // Assemble solicited configure data (for the current PBSG) and use it to
       // configure the current PBSG via 'pbsg.parse(String json)'.
-      logInfo('initialize', "Configure PBSG ${pbsgName}")
+      logInfo('exercisePbsg', "Configure PBSG ${pbsgName}")
       String prefix = "${pbsgName}_"
       Map prefs = [
         buttons: getButtonNames(prefix).join(' '),
@@ -460,14 +467,14 @@ void initialize() {
       // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
       ArrayList testSeqList = getTestSequence(pbsgName)
       logTrace(
-        'initialize',
+        'exercisePbsg',
         "PBSG ${b(pbsgName)} Test Sequence, ${bList(testSeqList)}"
       )
       Integer actionCnt = testSeqList.size()
       // Call the appropriate PBSG method per Test Action.
       testSeqList?.eachWithIndex{ testAction, index ->
         String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
-        logInfo('initialize', "${i(actionLabel)}: ${b(testAction)}")
+        logInfo('exercisePbsg', "${i(actionLabel)}: ${b(testAction)}")
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
@@ -475,34 +482,32 @@ void initialize() {
           String reference = "${index}: ${testAction}"
           switch (action) {
             case 'Activate':
-              pbsg.activate(target, reference)
+              pbsg.activate(target, "DemoPbsg ${reference}")
               break
             case 'Deactivate':
-              pbsg.deactivate(target, reference)
+              pbsg.deactivate(target, "DemoPbsg ${reference}")
               break
-            /*
             case 'VswOn':
-              pbsg.testVswOn(target, reference)
+              pbsg.testVswOn(target, "DemoPbsg ${reference}")
               break
             case 'VswOff':
-              pbsg.testVswOff(target, reference)
+              pbsg.testVswOff(target, "DemoPbsg ${reference}")
               break
             case 'VswPush':
-              pbsg.testVswPush(target, reference)
+              pbsg.testVswPush(target, "DemoPbsg ${reference}")
               break
-            */
             default:
               logError(
-                'initialize',
+                'exercisePbsg',
                 "Unknown action: ${action}, target: ${target}"
               )
           }
         } else {
-          logError('initialize', "Unsuccessful tokenize of >${testAction}<")
+          logError('exercisePbsg', "Unsuccessful tokenize of >${testAction}<")
         }
       }
     } else {
-      logError('configPbsg', 'Argument "pbsgName" was null')
+      logError('exercisePbsg', 'Argument "pbsgName" was null')
     }
   }
   // LOCATE AND DELETE ANY ORPHANED CHILD DEVICES
@@ -521,6 +526,7 @@ void initialize() {
   }
   // At this point, the App could exit before the results of running the
   // tests have been seen by the handlers.
+  /*
   Integer maxLoops = 10
   Integer sleepMs = 1000
   Integer loopCounter = 0
@@ -530,4 +536,5 @@ void initialize() {
     //logInfo('initialize', "${loopCounter}: ${timeToday('Thh:mm:ss')}")
     logInfo('initialize', "Loop Counter: ${loopCounter}")
   }
+  */
 }

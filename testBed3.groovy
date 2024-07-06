@@ -57,63 +57,69 @@ Map TestBed3() {
   ) {
     app.updateLabel("TestBed3 (${app.id})")
     section{
-      paragraph h1('ISO8601 Date Tests')
-      Instant tOut1 = java.time.Instant.now()
-      Instant tIn1 = Instant.parse('2024-07-05T17:37:50.371291Z')
-      Long durationMs1 = Duration.between(tIn1, tOut1).toMillis();
-      paragraph "in: ${tIn1}, out: ${tOut1}, duration: ${durationMs1} ms"
-      paragraph "duration: ${durationMs1/1000} s"
-      Instant tIn2 = java.time.Instant.now()
-      pauseExecution(150)
-      Instant tOut2 = java.time.Instant.now()
-      Long durationMs2 = Duration.between(tIn2, tOut2).toMillis();
-      paragraph "in: ${tIn2}, out: ${tOut2}, duration: ${durationMs2} ms"
-      paragraph "duration: ${durationMs2/1000} s"
-      paragraph h1('Click Done to begin Thread Test')
-      paragraph i('Review test output in Hubitat logs.')
+      paragraph h1('Passing Maps Test')
+      paragraph h2('No Insulation')
+      Map a = [a: 'one', b: 'two', c: 'three']
+      paragraph "a: ${a}"
+      appendToMap(a)
+      paragraph "a: ${a}"
+      removeFromMap(a)
+      paragraph "a: ${a}"
+      alterMap(a)
+      paragraph "a: ${a}"
+      paragraph h2('Insulated Copy')
+      a = [a: 'one', b: 'two', c: 'three']
+      paragraph "a: ${a}"
+      isolatedAppend(a)
+      paragraph "a: ${a}"
+      isolatedRemove(a)
+      paragraph "a: ${a}"
+      isolatedAlter(a)
+      paragraph "a: ${a}"
     }
   }
 }
 
-void producer(Map parms) {
-  ArrayList log = ['']
-  ArrayList cmds = parms.range.collect { e ->
-    [name: parms.name, value: e, tIn: "${java.time.Instant.now()}"]
-  }
-  cmds.each{ command -> q.put(command) }
+void appendToMap(Map a) {
+  x = a
+  x << [g: 'seven']
+  paragraph "In appendToMap, x: ${x}"
 }
 
-// There can only be one runInMillis() per fn; so, wrap producer().
-void producer1(Map parms) { producer(parms << [producer: 'producer1']) }
-void producer2(Map parms) { producer(parms << [producer: 'producer2']) }
-void producer3(Map parms) { producer(parms << [producer: 'producer3']) }
+void removeFromMap(Map a) {
+  x = a
+  x.findAll { k, v -> (k == 'b') } each { k, v -> x.remove k }
+  paragraph "In removeFromMap, x: ${x}"
+}
 
-void consumer(Map parms) {
-  logInfo('consumer', 'Starting a forever loop.')
-  while(true) {
-    Map cmd = q.take()
-    Instant tOut = java.time.Instant.now()
-    Instant tIn = Instant.parse(cmd.tIn)
-    Long qDuration = Duration.between(tIn, tOut).toMillis();
-    logInfo(
-      'consumer',
-      "Received ${bMap([ name: cmd.name, value: cmd.value, ageInMs: qDuration ])}"
-    )
-  }
+void alterMap(Map a) {
+  x = a
+  x.b = 'TWO'
+  paragraph "In alterMap, x: ${x}"
+}
+
+Map copyMap (Map x) {
+  return x.findAll { k, v -> (k) }
+}
+
+void isolatedAppend(Map x) {
+  localX = copyMap(x)
+  localX << [g: 'seven']
+  paragraph "In appendToMap, localX: ${localX}"
+}
+
+void isolatedRemove(Map x) {
+  localX = copyMap(x)
+  localX.findAll { k, v -> (k == 'b') } each { k, v -> localX.remove k }
+  paragraph "In removeFromMap, localX: ${localX}"
+}
+
+void isolatedAlter(Map x) {
+  localX = copyMap(x)
+  localX.b = 'TWO'
+  paragraph "In alterMap, localX: ${localX}"
 }
 
 void installed() {
-  logInfo('installed', 'Creating queue ...')
-  q = new SynchronousQueue<Map>()
-  logInfo('installed', 'Queue created.')
-  runInMillis(500, 'consumer', [data: [ref: "Single Consumer"]])
-  logInfo('installed', 'Consumer thread requested.')
-  // Throw stuff at the consumer and see what happens.
-  Map args1 = [ range: 1..30, name: 'alpha']
-  Map args2 = [ range: 31..60, name: 'beta']
-  Map args3 = [ range: 61..75, name: 'gamma']
-  runInMillis(500, 'producer1', [data: args1])
-  runInMillis(500, 'producer2', [data: args2])
-  runInMillis(500, 'producer3', [data: args3])
-  logInfo('installed', 'Producer thread requested')
+  logInfo('installed', 'TBD ...')
 }
