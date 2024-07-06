@@ -27,48 +27,15 @@ import java.lang.Object as Object
 
 // Imports specific to this file.
 import groovy.transform.Field
-import java.text.SimpleDateFormat
-//import java.time.ZonedDateTime
+import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
-//import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.SynchronousQueue
 
-@Field static ConcurrentHashMap<Long, Map> perPbsgState = [:]
-//@Field static ConcurrentHashMap<Long, String> perPbsgVersion = [:]
-//@Field static ConcurrentHashMap<Long, SynchronousQueue<Map>> perPbsgQueue = [:]
-@Field static ConcurrentHashMap<Long, ArrayList> perPbsgQueue = [:]
+@Field static ConcurrentHashMap<Long, Map> STATE = [:]
+@Field static ConcurrentHashMap<Long, SynchronousQueue> QUEUE = [:]
 
-Map csm() {  // Get the PBSG's Concurrent State Map (csm)
-  return perPbsgState[device.idAsLong]
-}
-
-//String currentVersion() {
-//  return perPbsgVersion[device.idAsLong]
-//}
-
-// Prefer: java.time.Instant.now()
-//-> String newVersion() {
-//->   SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss");
-//->   return df.format(new Date())
-//-> }
-
-ArrayList cmdQueue() {
-  return perPbsgQueue[device.idAsLong]
-}
-
-/*
-Integer nextVersion() {
-  Integer version = 1
-  if (!perPbsgVersion[device.idAsLong]) {           // Initialize
-    perPbsgVersion[device.idAsLong] = version
-  } else {
-    version = (version < Integer.MAX_VALUE)
-      ?  version + perPbsgVersion[device.idAsLong]  // Increment
-      : 1                                           // Rollover
-    perPbsgVersion[device.idAsLong] = rqstId
-  }
-  return rqstId
-}
-*/
+Long DID() { return device.idAsLong }
 
 metadata {
   definition(
@@ -90,9 +57,6 @@ metadata {
                                  // Commands: push(number)
 
     // Commands not implied by a Capability
-    //command 'buttonNameToPushed', [
-    //  [ name: 'button', type: 'text', description: 'position 1..N of button']
-    //]
     command 'config', [
       [ name: 'jsonPrefs', type: 'String', description: 'Map of prefs serialized as JSON']
     ]
@@ -161,56 +125,39 @@ metadata {
 
 // State Management Methods
 
+Map getEmptyPbsg() {
+  return [
+    version: java.time.Instant.now(),
+    buttonsList: [],
+    dflt: null,
+    instType: 'pbsg',
+    active: null,
+    lifo: []
+  ]
+}
+
 void installed() {
   // Called when a bare device is first constructed.
-  perPbsgState[device.idAsLong] = [
-    // NOTE: Update this whole Map atomically.
-    // STRUCTURAL FIELDS
-    version: java.time.Instant.now(),  // Version Timestamp .... String
-    buttonsList: [],                   // All PBSG buttons ..... ArrayList
-    dflt: null,                        // Default button ....... String | null
-    instType: 'pbsg',                  // PBSG 'psuedo-class' .. String
-    // DYNAMIC FIELDS
-    active: null,                      // Active button ........ String | null
-    lifo: []                           // Inactive buttons ..... ArrayList
-  ]
-  logInfo('installed', "perPbsgState: ${perPbsgState}")
-  perPbsgQueue[device.idAsLong] = [] //new SynchronousQueue(true)
-  logWarn('installed', [
-    "Constructed ${devHued(device)}.",
-    "Initial Concurrent State Map (csm): ${bMap(csm())}."
-  ])
-  // Tactically let's try one take().
-  //logInfo('installed', 'BEFORE TAKE')
-  //Map cmd = cmdQueue().take()
-  //logInfo('installed', "AFTER TAKE, cmd: ${cmd}")
+  logWarn('installed', 'Initializing STATE and QUEUE PBSG entries.')
+  STATE[DID()] = getEmptyPbsg()
+  QUEUE[DID()] = new SynchronousQueue(true)
 }
 
 void uninstalled() {
   // Called on device tear down.
-  logWarn(
-    'uninstalled',
-    'Removing perPbsgState and perPbsgQueue entries.'
-  )
-  perPbsgState.remove(device.idAsLong)
-  //perPbsgVersion.remove(device.idAsLong)
-  perPbsgQueue.remove(device.idAsLong)
+  logWarn('uninstalled', 'Removing STATE and QUEUE entries.')
+  STATE.remove(DID())
+  QUEUE.remove(DID())
 }
 
 void initialize() {
   // Called on hub startup (per capability "Initialize").
-  // Rebuilding/repopulating the Concurrent State Map (csm) for this device.
-  logTrace('initialize', 'Rebuilding PBSG if settings are sufficient.')
-  Map newStructure = newPbsg(ref: 'initialize()')
-  if (newStructure) {
-    Map pbsg = rebuildPbsg(newStructure)
-    if (pbsg) {
-      Map command = pbsg.take() //poll(2, SECONDS)
-      if (command) {
-        logInfo('initialize', "command: ${command}")
-      }
-    }
-  }
+  logTrace('initialize', 'Initializing STATE and QUEUE PBSG entries.')
+  Map pbsg = getEmptyPbsg()
+  STATE[DID()] = pbsg
+  QUEUE[DID()] = new SynchronousQueue(true)
+  logTrace('initialize', 'Attempting PBSG Rebuild from configuration data.')
+  updatePbsgStructure(ref: 'initialize')
 }
 
 void updated() {
@@ -218,17 +165,8 @@ void updated() {
   // preferences (aka settings) AND presses 'Save Preferences'.
   //   - If (and only if) devices settings have changed, the PBSG is rebuilt.
   //   - On PBSG rebuild, anything pending in the commandQueue is dropped.
-  logTrace('updated', 'Rebuilding PBSG if settings are sufficient.')
-  Map newPbsg = newPbsg(ref: 'updated()')
-  if (newPbsg) {
-    Map pbsg = rebuildPbsg(newPbsg: newPbsg)
-    if (pbsg) {
-      Map command = pbsg.poll(2, SECONDS)
-      if (command) { logInfo('updated', "command: ${command}") }
-    } else {
-      logError('updated', 'rebuildPbsg() failed, returning null')
-    }
-  }
+  logTrace('updated', 'Attempting PBSG Rebuild from configuration data.')
+  updatePbsgStructure(parms: [ref: 'updated'])
 }
 
 // UTILITY METHODS
@@ -243,63 +181,46 @@ Integer buttonNameToPushed(String button, ArrayList buttons) {
 // STATE ALTERING COMMANDS
 
 void config(String jsonPrefs, String ref = '') {
-  Map pbsg = csm()
-  //-> logTrace('config', "versionA: ${pbsg.version}")       // SUCCESS
-  //-> logTrace('config', "versionB: ${pbsg[version]}")      // FAIL
-  //-> logTrace('config', "versionC: ${pbsg."${version}"}")  // FAIL
-  //logTrace('config', ['',
-  //  "Queueing Config w/ jsonPrefs: ${jsonPrefs}",
-  //  "ref: ${ref}",
-  //  "perPbsgState[device.idAsLong]: ${perPbsgState[device.idAsLong]}",
-  //  "csm(): ${csm()}"
-  //])
-  //-> Map cmd =
-  //-> logTrace('config', "cmd: ${bMap(cmd)}")
-  //SynchronousQueue<Map> q = cmdQueue()
-  //-> logTrace('config', "TEST: ${q != null}")
-  //boolean result = q.offer(cmd, 2, SECONDS)
-  logTrace('config', "BEFORE queue add, q: ${cmdQueue()}")
-  cmdQueue() << [
-    name: 'Config',
-    arg: jsonPrefs,
-    ref: ref,
-    version: pbsg.version
-  ]
-  logTrace('config', "AFTER queue add, q: ${cmdQueue()}")
-  Map cmd = cmdQueue().pop()
-  logTrace('config', "AFTER queue pop, cmd: ${cmd}")
+  // If a config change alters the structure of the PBSG:
+  //   - The PBSG is rebuilt to the new structure
+  //   - The PBSG version is updated.
+  //   - The cmdQueueHandle is bounced and targets the commands for
+  //     the new version.
+  updatePbsgStructure(config: jsonPrefs, ref: 'updated')
 }
 
 void activate(String button, String ref = '') {
-  logTrace('activate', "Queueing Activate ${b(button)}.")
-  cmdQueue().put([
+  Map command = [
     name: 'Activate',
     arg: button,
     ref: ref,
-    version: csm()?."${version}"
-  ]) //, 2, SECONDS)
+    version: STATE[DID()].version
+  ]
+  logTrace('activate', "Queing ${bMap(command)}")
+  // At a later date, offer vs put.
+  QUEUE[DID()].put(command)
 }
 
 void deactivate(String button, String ref = '') {
-  logTrace('deactivate', "Queueing Deactivate ${b(button)}.")
-  //cmdQueue().offer([
-  cmdQueue().put([
+  Map command = [
     name: 'Deactivate',
     arg: button,
     ref: ref,
-    version: csm().version
-  ]) //, 2, SECONDS)
+    version: STATE[DID()].version
+  ]
+  logTrace('deactivate', "Queing ${bMap(command)}")
+  QUEUE[DID()].put(command)
 }
 
 void toggle(String button, String ref = '') {
-  logTrace('toggle', "Queueing Toggle ${b(button)}.")
-  //cmdQueue().offer([
-  cmdQueue().put([
+  Map command = [
     name: 'Toggle',
     arg: button,
     ref: ref,
-    version: csm().version
-  ]) //, 2, SECONDS)
+    version: STATE[DID()].version
+  ]
+  logTrace('toggle', "Queing ${bMap(command)}")
+  QUEUE[DID()].put(command)
 }
 
 void testVswOn(String button, String ref = '') {
@@ -319,33 +240,42 @@ void testVswPush(String button, String ref = '') {
 
 //// STATE ALTERING METHODS
 
-Map newPbsg(Map parms) {
+void updatePbsgStructure(Map parms) {
   // Abstract
-  //   Determine if the STATIC component of the PBSG Concurrent State Map (CSM)
-  //   has changed - necessitating a Version update. If the structure of the
-  //   PBSG has changed, build/rebuild the DYNAMIC component of the PBSG and
-  //   update the CSM.
+  //   * Evaluates the health of config (settings overlayed with parms.conf).
+  //   * If config is healthy and the PBSG STRUCTURE has changed:
+  //     ** Updates the PBSG Version
+  //     ** Rebuilds the PBSG's DYNAMIC keys.
+  //     ** Unschedules the cmdQueueHandler.
+  //     ** Updates STATE
+  //     ** Re-schedules the cmdQueueHandler (focused on the new Version)
   // Input
   //   parms.config - Map of <k, v> pairs that overwrite settings <k, v> pairs.
   //      parms.ref - Context string provided by caller
   // Output
   //   null - Config is unhealthy or unchanged relative to CSM, see logs.
-  //    Map - newPbsg wtih only the structural <k, v> pairs populated.
-  Map newPbsg = null
+  //    Map - The new PBSG (as saved to STATE).
   Map config = settings   // Insert Preference <k, v> pairs.
-  config << parms.config  // Prefer any <k, v> pairs supplied via parms.config.
-  ArrayList issues = []   // Keep track of net config issues.
+  config << parms.config  // Overlay provided <k, v> pairs (from parms).
+  ArrayList issues = []   // Accumulate any config issues.
   if (config) {
-    // Two log fields ARE NOT part of CSM.
+    // Process the (two) log fields which ARE NOT part of STATE.
     if (config.logLevel == null) {
-      issues << "The setting ${b('logLevel')} is null."
+      issues << "Missing config ${b('logLevel')}, defaulting to TRACE."
+      updateSetting(logLevel, 'TRACE')
+      setLogLevel('TRACE')
+    } else if (!['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'].contains(config.logLevel)) {
+      issues << "Unrecognized config ${b('logLevel')} '${config.logLevel}', defaulting to TRACE."
+      updateSetting(logLevel, 'TRACE')
+      setLogLevel('TRACE')
     } else {
-      setLogLevel(config.logLevel ?: 'TRACE')  // Copious logging
+      setLogLevel(config.logLevel)
     }
     if (config.logVswActivity == null) {
-      issues << "The setting ${b('logVswActivity')} is null."
+      issues << "The setting ${b('logVswActivity')} is null, forcing TRUE"
+      updateSetting(logVswActivity, true)
     }
-    // Proceed to STATIC CSM fields.
+    // Reviewing PBSG Structural fields.
     Boolean healthyButtons = true
     String markDirty = config?.buttons?.replaceAll(/[\W_&&[^_ ]]/, '▮')
     ArrayList buttonsList = config?.buttons?.tokenize(' ')
@@ -368,7 +298,7 @@ Map newPbsg(Map parms) {
       ].join('<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')
       healthyButtons = false
     }
-    // Normalize settings.buttons.
+    // Normalize settings.buttons (e.g., reduce excess whitespace)
     if (healthyButtons) { updateSetting('buttons', buttonsList.join(' ')) }
     if (config.dflt == null) {
       issues << "The setting ${b('dflt')} is null (expected 'not_applicable')"
@@ -386,8 +316,8 @@ Map newPbsg(Map parms) {
     issues << 'No Preferences/settings or parms.config map was found.'
   }
   if (issues) {
-    // Report the discovered issues and stop.
-    logError('newPbsg', [ parms.ref,
+    // REPORT THE DISCOVERED ISSUES AND STOP.
+    logError('updatePbsgStructure', [ parms.ref,
       'The following known issues prevent a PBSG (re-)build at this time',
       *issues
     ])
@@ -395,35 +325,33 @@ Map newPbsg(Map parms) {
     // Does the (healthy) configuration merits a PBSG rebuild?
     String dflt = (config.dflt == 'not_applicable') ? null : config.dflt
     Boolean structureAltered = (
-      config.buttonsList != csm().buttonsList
-      || dflt != csm().dflt
-      || config.instType != csm().instType
+      config.buttonsList != STATE[DID()].buttonsList
+      || dflt != STATE[DID()].dflt
+      || config.instType != STATE[DID()].instType
     )
     if (structureAltered) {
-      logWarn('newPbsg', [ parms.ref,
+      logWarn('updatePbsgStructure', [ parms.ref,
         'The PBSG structure has changed, necessitating a PBSG rebuild.'
       ])
-      // Initialize the prospective Concurrent State Map (CSM) update in memory.
-      newPbsg = [
-        // STRUCTURAL FIELDS
+      // Populate newPbsg with Structural fields only.
+      Map newPbsg = [
         version: java.time.Instant.now(),
         buttonsList: buttonsList,
         dflt: dflt,
-        instType: config.instType,
-        // DYNAMIC FIELDS
+        instType: 'pbsg',
         active: null,
         lifo: []
       ]
+      Map pbsg = populateNewPbsg(newPbsg: newPbsg, ref: parms.ref)
     } else {
       logWarn('newPbsg', [ parms.ref,
         'The PBSG is healthy and DOES NOT REQUIRE a rebuild'
       ])
     }
   }
-  return result
 }
 
-Map rebuildPbsg(Map parms) {
+Map populateNewPbsg(Map parms) {
   // Abstract
   //   Rebuild the PBSG per the revised structure of the PBSG and iteratively
   //   process the Command Queue.
@@ -434,33 +362,38 @@ Map rebuildPbsg(Map parms) {
   //   null - Rebuild failed to update CSM.
   //    Map - Successful PBSG used to update CSM. Suitable for Queue processing.
   Map result = null
-  if (parms?.newPbsg) {
-    logWarn('rebuildPbsg', [ parms.ref,
+  if (parms.newPbsg) {
+    //==>Map pbsg = parms.newPbsg.findAll { k, v -> (k) } // Copy all keys
+    logWarn('populateNewPbsg', [ parms.ref,
       'Rebuilding PBSG ...', "New version is ${newPbsg.version}"
     ])
     newPbsg.buttonsList.each { button ->
       ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
       newPbsg.lifo.push(button)
       if (vsw.switch == 'on') { pbsg_ActivateButton(newPbsg, button) }
-      logTrace('rebuildPbsg', pbsg_StateHtml(newPbsg))
+      logTrace('populateNewPbsg', pbsg_StateHtml(newPbsg))
     }
     if (!newPbsg.active && newPbsg.dflt) {
-      logTrace('rebuildPbsg', "Activating default ${b(newPbsg.dflt)}")
-      result = pbsg_ActivateButton(newPbsg, newPbsg.dflt)
+      logTrace('populateNewPbsg', "Activating default ${b(newPbsg.dflt)}")
+      pbsg_ActivateButton(newPbsg, newPbsg.dflt)
     }
     // Capture data for sendEvent(...) updates.
-    Integer oldCnt = csm().buttonsList.size()
+    Integer oldCnt = STATE[DID()].buttonsList.size()
     Integer newCnt = newPbsg.buttonsList.size()
-    Integer oldPos = buttonNameToPushed(csm().active, csm().buttonsList)
+    Integer oldPos = buttonNameToPushed(STATE[DID()].active, STATE[DID()].buttonsList)
     Integer newPos = buttonNameToPushed(pbsg.active, pbsg.buttonsList)
-    String desc = "${csm().active} (${oldPos}) → ${newPbsg.active} (${newPos})"
-    Boolean activeChanged = csm().active != newPbsg.active
+    String desc = "${STATE[DID()].active} (${oldPos}) → ${newPbsg.active} (${newPos})"
+    Boolean activeChanged = STATE[DID()].active != newPbsg.active
     Boolean cntChanged = oldCount != newCount
-    // Update CSM
-    perPbsgState[device.idAsLong] = newPbsg
-    logTrace('rebuildPbsg', "New CSM: ${bMap(csm())}")
-    // Update Attributes
-    logTrace('rebuildPbsg', "Updating active: ${b(newPbsg.active)}")
+    STATE[DID()] = newPbsg
+    logTrace('populateNewPbsg', 'Release cmdQueueHandler for prior version.')
+    unschedule('cmdQueueHandler') // Release Handler for Prior Version
+    logTrace('populateNewPbsg', "Launch cmdQueueHandler for version ${newPbsg.version}.")
+    Map args = [ version: newPbsg.version, ref: parms.ref ]
+    runInMillis(500, 'cmdQueueHandler', [data: args])
+    result = newPbsg
+    // Update Related Attributes
+    logTrace('populateNewPbsg', "Updating active: ${b(newPbsg.active)}")
     device.sendEvent(
       name: 'active',
       isStateChange: activeChanged,
@@ -468,7 +401,7 @@ Map rebuildPbsg(Map parms) {
       unit: '#',
       descriptionText: desc
     )
-    logTrace('rebuildPbsg', "Updating numberOfButtons: ${b(newCnt)}")
+    logTrace('populateNewPbsg', "Updating numberOfButtons: ${b(newCnt)}")
     device.sendEvent(
       name: 'numberOfButtons',
       isStateChange: cntChanged,
@@ -477,7 +410,7 @@ Map rebuildPbsg(Map parms) {
       descriptionText: desc
     )
     String jsonPbsg = toJson(pbsg)
-    logTrace('rebuildPbsg', "Updating jsonPbsg: ${bMap(pbsg)}")
+    logTrace('populateNewPbsg', "Updating jsonPbsg: ${bMap(pbsg)}")
     device.sendEvent(
       name: 'jsonPbsg',
       isStateChange: true,
@@ -487,69 +420,42 @@ Map rebuildPbsg(Map parms) {
     pruneOrphanedDevices(newPbsg)
     result = newPbsg
   } else {
-    logError('rebuildPbsg', 'Missing parms.pbsg')
+    logError('populateNewPbsg', 'Missing parms.pbsg')
   }
   return result
 }
 
-void processCommandQueue(Map pbsg) {
-  logTrace('processCommandQueue', "pbsg: ${pbsg}")
-  //-> csm().remove('activeCO')
-  if (pbsg == null) {
-    logError('processCommandQueue', 'Called with null "pbsg" parameter.')
-  } else {
-    Map command = null
-    while (command = nextCommandFromQueue()) {
-      switch(command.name) {
-        case 'Config':
-          newPbsg(pbsg, command.ref)
-          break
-        case 'Parse':
-          //Map jsonPrefs = fromJson(command.arg, String ref = command.ref)
-          Map jsonPrefs = parseJson(command.arg, ref = command.ref)
-          newPbsg(pbsg, command.ref, settings << jsonPrefs)
-          break
-        case 'Activate':
-          String button = command.arg
-          logTrace('activate', button)
-          pbsg_ActivateButton(pbsg, button)
-          ciPbsg(pbsg, command.ref)
-          break
-        case 'Deactive':
-          String button = command.arg
-          logTrace('deactivate', button)
-          pbsg_DeactivateButton(pbsg, button)
-          ciPbsg(pbsg, command.ref)
-          break
-        /*
-        case 'TestVswOn':
-          break
-        case 'TestVswOff':
-          break
-        case 'TestVswPush':
-          String button = command.arg
-          if (pbsg.active == button) {
-            logTrace('processCommandQueue', "Push toggling ${button} off.")
-            pbsg_DeactivateButton(pbsg, button)
-          } else {
-            logTrace('processCommandQueue', "Push toggling ${button} on.")
-            pbsg_ActivateButton(pbsg, button)
-          }
-          break
-        */
-        default:
-          logError('processCommandQueue', "Unexpected Command: ${command}")
-      }
+void cmdQueueHandler(Map parms) {
+  // Abstract
+  //   Process arriving commands (for this version only) updating STATE
+  //   for this PBSG when appropriate.
+  // Input
+  //   parms.version - Accept commands for this version only.
+  //       parms.ref - Context string provided by caller
+  while (1) {
+    // At a later date, poll vs. take
+    Map command = QUEUE[DID()].take()
+    switch(command.name) {
+      case 'Activate':
+        String button = command.arg
+        logTrace('activate', button)
+        pbsg_ActivateButton(pbsg, button)
+        ciPbsg(pbsg, command.ref)
+        break
+      case 'Deactive':
+        String button = command.arg
+        logTrace('deactivate', button)
+        pbsg_DeactivateButton(pbsg, button)
+        ciPbsg(pbsg, command.ref)
+        break
+      case 'Toggle':
+        logError('cmdQueueHandler', 'TOGGLE NOT IMPLEMENTED')
+        break
+      default:
+        logError('cmdQueueHandler', "Unexpected Command: ${command}")
     }
-    releaseLock()
   }
 }
-
-//-> void refreshVsws() {
-//->   // Support child VSW refresh in isolation for system restart, etc.
-//-> }
-
-//----
 
 void turnOnVsw(String button) {
   ChildDevW d = getVswForButton(button)
@@ -594,7 +500,7 @@ String currentSettingsHtml() {
 }
 
 void pruneOrphanedDevices(Map pbsg) {
-  ArrayList buttonsList = csm().buttonsList
+  ArrayList buttonsList = STATE[DID()].buttonsList
   ArrayList expectedChildDnis = buttonsList.collect { button ->
     "${device.getLabel()}_${button}"
   }
@@ -603,7 +509,7 @@ void pruneOrphanedDevices(Map pbsg) {
   }
   ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
   orphanedDevices.each { dni ->
-    logWarn('rebuildPbsg', "Removing orphaned device ${b(dni)}.")
+    logWarn('pruneOrphanedDevices', "Removing orphaned device ${b(dni)}.")
     deleteChildDevice(dni)
   }
 }
@@ -791,7 +697,7 @@ void push(Integer buttonNumber) {
     logInfo('push', "Received ${b(buttonNumber)} (${button})")
     activateButton(button)
   } else {
-    logError('push', 'null csm().buttonsList')
+    logError('push', 'null STATE[DID()].buttonsList')
   }
 }
 

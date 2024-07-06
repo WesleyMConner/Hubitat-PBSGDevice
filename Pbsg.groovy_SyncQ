@@ -44,10 +44,6 @@ Map csm() {  // Get the PBSG's Concurrent State Map (csm)
 //  return perPbsgVersion[device.idAsLong]
 //}
 
-String newVersion() {
-  SimpleDateFormat df = new SimpleDateFormat("YYYY-MM-DD-HH:mm:ss");
-  return df.format(new Date())
-}
 
 SynchronousQueue<Map> cmdQueue() {
   return perPbsgQueue[device.idAsLong]

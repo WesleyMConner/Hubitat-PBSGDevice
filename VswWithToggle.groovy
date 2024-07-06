@@ -48,37 +48,43 @@ metadata {
 
 void on(String ref = null) {
   if (parent.settings.logVswActivity) { logTrace('on', 'Received on()') }
-  parent.cmdQueue().offer([
+  Map command = [
     name: 'Activate',
-    arg: parent.vswToButtonName(this.device),
+    arg: button,
     ref: ref,
-    version: parent.csm().version
-  ], 2, SECONDS) || logError('off', 'Could not queue "Activate".')
+    version: STATE[parent.DID()].version
+  ]
+  logTrace('on', "Queing ${bMap(command)}")
+  QUEUE[parent.DID()].put(command)
 }
 
 void off(String ref = null) {
-  if (parent.settings.logVswActivity) { logTrace('on', 'Received off()') }
-  parent.cmdQueue().offer([
+  if (parent.settings.logVswActivity) { logTrace('off', 'Received off()') }
+  Map command = [
     name: 'Deactivate',
-    arg: parent.vswToButtonName(this.device),
+    arg: button,
     ref: ref,
-    version: parent.csm().version
-  ], 2, SECONDS) || logError('off', 'Could not queue "Deactivate".')
+    version: STATE[parent.DID()].version
+  ]
+  logTrace('off', "Queing ${bMap(command)}")
+  QUEUE[parent.DID()].put(command)
 }
 
 void push(String ref = null) {
-  if (parent.settings.logVswActivity) { logTrace('on', 'Received push()') }
-  parent.cmdQueue().offer([
+  if (parent.settings.logVswActivity) { logTrace('push', 'Received push()') }
+  Map command = [
     name: 'Toggle',
-    arg: parent.vswToButtonName(this.device),
+    arg: button,
     ref: ref,
-    version: parent.csm().version
-  ], 2, SECONDS) || logError('off', 'Could not queue "Toggle".')
+    version: STATE[parent.DID()].version
+  ]
+  logTrace('push', "Queing ${bMap(command)}")
+  QUEUE[parent.DID()].put(command)
 }
 
 // EXPECT PARENT TO MANIPULATE THIS DEVICE
 
-void parse(ARRAYLIST ACTIONS) {
+void parse(ArrayList actions) {
   // This command expects actions (an ArrayList) of commands (Maps).
   // Each Map must be suitable for execution by sendEvent().
   //      +-----------------+-------------------------+

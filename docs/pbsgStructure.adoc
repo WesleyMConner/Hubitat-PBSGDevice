@@ -1,0 +1,33 @@
+:table-caption!:
+
+= PBSG Structure
+
+== Static Data Structures
+Two data structures house data across all PBSG instances
+
+=== ConcurrentHashMap<long, Map> STATE
+STATE `<k, v>` pairs: ::
+`<device.idAsLong, pbsgStateMap>`
+
+Each PBSG has a *pbsgStateMap* with the following keys.
+
+[width="100%", frame="ends", grid="all", cols=">20,^22,<58"]
+|===
+3+<|*STRUCTURAL FIELDS* - Changes generate a new version and PBSG Rebuild
+|version |String |java.time.Instant.now()
+|buttonsList |ArrayList<String> |All PBSG Buttons
+|dflt |String \| null |The Default Button (_optional_)
+|instType |String |Defaults to pseudo-class 'pbsg'
+3+<|*DYNAMIC FIELDS* - Changes occur in response to arriving commands.
+|active |String \| null |The currently enabled button
+|lifo |ArrayList<String> |The currently inactive buttons
+|===
+
+=== ConcurrentHashMap<Long, SynchronousQueue> QUEUE
+QUEUE `<k, v>` pairs: :: `<device.idAsLong, commandQueue>`
+
+.Each PbSG has a `commandQueue`, where:
+
+* A single thread is created to calls `take()` - extracting messages one at a time AND (if appropriate) updating the `pbsgStateMap`.
+* Commands arise via multiple threads which call `put()` - which blocks until a corresponding `take()` accepts the request.
+* FIFO order is maintained among concurrent efforts to `put()` commands.
