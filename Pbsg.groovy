@@ -142,7 +142,7 @@ void installed() {
   // Called when a bare device is first constructed.
   logWarn('installed', 'Initializing STATE and QUEUE PBSG entries.')
   STATE[DID()] = getEmptyPbsg()
-  QUEUE[DID()] = new SynchronousQueue(true)
+  QUEUE[DID()] = new SynchronousQueue(true) // TRUE → FIFO
 }
 
 void uninstalled() {
@@ -159,7 +159,7 @@ void initialize() {
   STATE[DID()] = pbsg
   QUEUE[DID()] = new SynchronousQueue(true)
   logTrace('initialize', 'Attempting PBSG Rebuild from configuration data.')
-  updatePbsgStructure(ref: 'initialize')
+  updatePbsgStructure(ref: 'Invoked by initialize()')
 }
 
 void updated() {
@@ -168,7 +168,7 @@ void updated() {
   //   - If (and only if) devices settings have changed, the PBSG is rebuilt.
   //   - On PBSG rebuild, anything pending in the commandQueue is dropped.
   logTrace('updated', 'Attempting PBSG Rebuild from configuration data.')
-  updatePbsgStructure(parms: [ref: 'updated'])
+  updatePbsgStructure(parms: [ref: 'Invoked by updated()'])
 }
 
 // UTILITY METHODS
@@ -188,7 +188,7 @@ void config(String jsonPrefs, String ref = '') {
   //   - The PBSG version is updated.
   //   - The cmdQueueHandle is bounced and targets the commands for
   //     the new version.
-  updatePbsgStructure(config: jsonPrefs, ref: 'updated')
+  updatePbsgStructure(config: jsonPrefs, ref: 'Invoked by config()')
 }
 
 void activate(String button, String ref = '') {
@@ -262,7 +262,10 @@ void updatePbsgStructure(Map parms) {
       device.updateSetting('logLevel', 'TRACE')
       setLogLevel('TRACE')
     } else if (!['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'].contains(config.logLevel)) {
-      issues << "Unrecognized config ${b('logLevel')} '${config.logLevel}', defaulting to TRACE."
+      issues << [
+        "Unrecognized config ${b('logLevel')} '${config.logLevel}', ",
+        'defaulting to TRACE.'
+      ].join()
       device.updateSetting('logLevel', 'TRACE')
       setLogLevel('TRACE')
     } else {
@@ -316,8 +319,8 @@ void updatePbsgStructure(Map parms) {
   }
   if (issues) {
     // REPORT THE DISCOVERED ISSUES AND STOP.
-    logError('updatePbsgStructure', [ parms.ref,
-      'The following known issues prevent a PBSG (re-)build at this time',
+    logError('updatePbsgStructure', [ i(parms.ref),
+      'The following issues prevent a PBSG (re-)build at this time',
       *issues
     ])
   } else {
@@ -329,9 +332,6 @@ void updatePbsgStructure(Map parms) {
       || config.instType != STATE[DID()].instType
     )
     if (structureAltered) {
-      logWarn('updatePbsgStructure', [ parms.ref,
-        'The PBSG structure has changed, necessitating a PBSG rebuild.'
-      ])
       // Populate newPbsg with Structural fields only.
       Map newPbsg = [
         version: timestampAsString(),
@@ -341,10 +341,13 @@ void updatePbsgStructure(Map parms) {
         active: null,
         lifo: []
       ]
+      logWarn('updatePbsgStructure', [ i(parms.ref),
+        "The PBSG structure has changed, new version: ${b(newPbsg.version)}."
+      ])
       Map pbsg = populateNewPbsg(newPbsg: newPbsg, ref: parms.ref)
     } else {
-      logWarn('newPbsg', [ parms.ref,
-        'The PBSG is healthy and DOES NOT REQUIRE a rebuild'
+      logWarn('newPbsg', [ i(parms.ref),
+        'The PBSG is healthy and DOES NOT REQUIRE a rebuild.'
       ])
     }
   }
@@ -362,19 +365,18 @@ void populateNewPbsg(Map parms) {
   Map pbsg = null
   if (parms.newPbsg) {
     pbsg = airGap(parms.newPbsg)
-    logWarn('populateNewPbsg', [ parms.ref,
-      'Rebuilding PBSG ...', "New version is ${pbsg.version}"
-    ])
     pbsg.buttonsList.each { button ->
       ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
       pbsg.lifo.push(button)
-      if (vsw.switch == 'on') { pbsgActivate(pbsg, button, parms.ref) }
+      if (vsw.switch == 'on') {
+        pbsgActivate(pbsg, button, 'invoked by populateNewPbsg()')
+      }
     }
     if (!pbsg.active && pbsg.dflt) {
-      pbsgActivate(pbsg, pbsg.dflt, parms.ref)
+      pbsgActivate(pbsg, pbsg.dflt, 'invoked by populateNewPbsg()')
     }
-    logTrace('populateNewPbsg', 'Handing off to savePbsgState()')
-    savePbsgState(pbsg: pbsg, ref: parms.ref)
+    //-> logTrace('populateNewPbsg', 'Handing off to savePbsgState()')
+    savePbsgState(pbsg: pbsg, ref: 'invoked by populateNewPbsg()')
   } else {
     logError('populateNewPbsg', 'Called with null parms.newPbsg')
   }
@@ -399,19 +401,31 @@ void savePbsgState(Map parms) {
     String from = "${i(STATE[DID()].active)} (${i(oldPos)})"
     String to = "${b(pbsg.active)} (${b(newPos)})"
     String desc = "[Change: ${from} → ${to}]"
-    Boolean activeChanged = STATE[DID()].active != pbsg.active
-    Boolean cntChanged = oldCount != newCount
+    Boolean activeChanged = (STATE[DID()].active != pbsg.active)
+    Boolean cntChanged = (oldCnt != newCnt)
     STATE[DID()] = pbsg
     logTrace('populateNewPbsg', 'Replacing cmdQueueHandler for new PBSG version.')
     Map args = [ version: pbsg.version, ref: parms.ref ]
     runInMillis(500, 'cmdQueueHandler', [data: args, overwrite: true])
-    logTrace('populateNewPbsg', "Updating jsonPbsg for: ${bMap(pbsg)}, (${desc})")
+    // Reconcile VSWs
+    pbsg.buttonsList.each{ button ->
+      if (pbsg.active == button) {
+        turnOnVsw(button)
+      } else {
+        turnOffVsw(button)
+      }
+    }
+    logTrace('populateNewPbsg', ['Updating jsonPbsg',
+      bMap(pbsg),
+      pbsg_StateHtml(pbsg)
+    ])
     device.sendEvent(
       name: 'jsonPbsg',
       isStateChange: true,
       value: toJson(pbsg),
-      descriptionText: desc
+      descriptionText: pbsg_StateHtml(pbsg)
     )
+    //-> logTrace('populateNewPbsg', "activeChanged: ${activeChanged}")
     if (activeChanged) {
       logTrace('populateNewPbsg', "Updating active: ${b(pbsg.active)}, (${desc})")
       device.sendEvent(
@@ -422,6 +436,7 @@ void savePbsgState(Map parms) {
         descriptionText: desc
       )
     }
+    //-> logTrace('populateNewPbsg', "cntChanged: ${cntChanged} ${oldCnt}->${newCnt}")
     if (cntChanged) {
       logTrace('populateNewPbsg', "Updating numberOfButtons: ${b(newCnt)}, (${desc})")
       device.sendEvent(
@@ -437,6 +452,10 @@ void savePbsgState(Map parms) {
   } else {
     logError('populateNewPbsg', 'Missing parms.pbsg')
   }
+}
+
+Boolean logVswActivity() {
+  return settings.logVswActivity
 }
 
 void cmdQueueHandler(Map parms) {
@@ -464,52 +483,15 @@ void cmdQueueHandler(Map parms) {
             String button = command.arg
             Map pbsg = STATE[DID()]
             pbsgActivate(pbsg, button, command.ref)
-            /*
-            // ACTIVATE START
-            if (pbsg?.active == button) {
-              logInfo('cmdQueueHandler', ["Ignoring 'Activate ${b(button)}'",
-                'The button is already active.'
-              ])
-            } else if (pbsg.lifo.contains(button)) {
-              logInfo('cmdQueueHandler', "Activating ${b(button)}")
-              if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
-              pbsg.lifo.removeAll([button])
-              pbsg.active = button
-              savePbsgState(pbsg: pbsg, ref: command.ref)
-            } else {
-              logWarn('cmdQueueHandler', ["Ignoring 'Activate ${b(button)}'",
-                "The button is not found. (PBSG: ${bMap(pbsg)})"
-              ])
-            }
-            // ACTIVATE END
-            */
+            logTrace('cmdQueueHandler', 'case Activate handoff to savePbsgState()')
+            savePbsgState(pbsg: pbsg, ref: command.ref)
             break
           case 'Deactivate':
             String button = command.arg
             Map pbsg = STATE[DID()]
             pbsgDeactivate(pbsg, button, command.ref)
-            /*
-            // DEACTIVATE START
-            if (pbsg.active != button) {
-              logWarn('cmdQueueHandler', ["Ignoring 'Deactivate ${b(button)}'",
-                'The button is not active.'
-              ])
-            } else if (pbsg.active == pbsg.dflt) {
-              logWarn('cmdQueueHandler', ["Ignoring 'Deactivate ${b(button)}'",
-                'The button is the default button'
-              ])
-            } else if (pbsg.active == button) {
-              logInfo('cmdQueueHandler', "Deactivating ${b(button)}")
-              pbsg.lifo.push(pbsg.active)
-              pbsg.active = null
-              if (pbsg.dflt) {
-                pbsg.lifo.removeAll([pbsg.dflt])
-                pbsg.active = pbsg.dflt
-              }
-              savePbsgState(pbsg: pbsg, ref: command.ref)
-            }
-            // DEACTIVATE END
-            */
+            logTrace('cmdQueueHandler', 'case Deactivate handoff to savePbsgState()')
+            savePbsgState(pbsg: pbsg, ref: command.ref)
             break
           case 'Toggle':
             String button = command.arg
@@ -608,7 +590,7 @@ void turnOnVsw(String button) {
     ArrayList commands = [] << [
       name: 'switch',
       value: 'on',
-      descriptionText: "Turned ${b('on')} ${devHued(d)}",
+      descriptionText: "Turned on ${d.getDeviceNetworkId()}",
       isStateChange: (d.switch != 'on')
     ]
     d.parse(commands)
@@ -623,7 +605,7 @@ void turnOffVsw(String button) {
       ArrayList commands = [] << [
         name: 'switch',
         value: 'off',
-        descriptionText: "Turned ${b('off')} ${devHued(d)}",
+        descriptionText: "Turned off ${d.getDeviceNetworkId()}",
         isStateChange: (d.switch != 'off')
       ]
       d.parse(commands)

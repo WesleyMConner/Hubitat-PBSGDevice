@@ -47,11 +47,11 @@ metadata {
 // COMMANDS FOR ADVERTISED CAPABILITIES
 
 void on(String ref = null) {
-  if (parent.settings.logVswActivity) { logTrace('on', 'Received on()') }
+  if (parent.logVswActivity()) { logTrace('on', 'Received on()') }
   Map command = [
     name: 'Activate',
     arg: button,
-    ref: ref,
+    ref: i(ref),
     version: STATE[parent.DID()].version
   ]
   logTrace('on', "Queing ${bMap(command)}")
@@ -59,11 +59,11 @@ void on(String ref = null) {
 }
 
 void off(String ref = null) {
-  if (parent.settings.logVswActivity) { logTrace('off', 'Received off()') }
+  if (parent.logVswActivity()) { logTrace('off', 'Received off()') }
   Map command = [
     name: 'Deactivate',
     arg: button,
-    ref: ref,
+    ref: i(ref),
     version: STATE[parent.DID()].version
   ]
   logTrace('off', "Queing ${bMap(command)}")
@@ -71,11 +71,11 @@ void off(String ref = null) {
 }
 
 void push(String ref = null) {
-  if (parent.settings.logVswActivity) { logTrace('push', 'Received push()') }
+  if (parent.logVswActivity()) { logTrace('push', 'Received push()') }
   Map command = [
     name: 'Toggle',
     arg: button,
-    ref: ref,
+    ref: i(ref),
     version: STATE[parent.DID()].version
   ]
   logTrace('push', "Queing ${bMap(command)}")
@@ -97,8 +97,8 @@ void parse(ArrayList actions) {
   // PROCESS THE LIST OF ACTIONS
   ArrayList allowedActions = ['switch']
   actions.each{ action ->
-    if (parent.settings.logVswActivity) {
-      logTrace('parse', "Received action: ${bMap(action)}")
+    if (parent.logVswActivity()) {
+      logTrace('parse', ['Received action:', bMap(action)])
     }
     if (action?.name in allowedActions) { sendEvent(action) }
   }

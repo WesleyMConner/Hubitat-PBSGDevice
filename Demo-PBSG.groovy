@@ -40,9 +40,9 @@ definition (
 void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
-    logInfo('handle_numberOfButtons',
-      "${e.name} = ${b(val)} (${e.descriptionText}) per ${eventSender(e)}"
-    )
+    logInfo('handle_numberOfButtons', ["${eventSender(e)}: ${e.descriptionText}",
+      "${e.name}: ${b(val)}"
+    ])
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
   }
@@ -51,9 +51,9 @@ void handle_numberOfButtons(Event e) {
 void handle_pushed(Event e) {
   if (e.name == 'pushed') {
     Integer val = e.value.toInteger()
-    logInfo('handle_pushed',
-      "${e.name} = ${b(e.value)} (${e.descriptionText}) per ${eventSender(e)}"
-    )
+    logInfo('handle_pushed', ["${eventSender(e)}: ${e.descriptionText}",
+      "${e.name} = ${b(val)}"
+    ])
   } else {
     logError('handle_pushed', "Unexpected event: ${eventDetails(e)}")
   }
@@ -63,9 +63,7 @@ void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     //Map pbsg = fromJson(e.value)
     Map pbsg = parseJson(e.value)
-    logInfo('handle_jsonPbsg',
-      "pbsg = <br/>>${bMap(pbsg)}< <br/>>(${e.descriptionText}) <br/>>per ${eventSender(e)}"
-    )
+    logInfo('handle_jsonPbsg', getChildDevice(e.displayName).pbsg_StateHtml(pbsg))
   } else {
     logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
   }
@@ -73,9 +71,9 @@ void handle_jsonPbsg(Event e) {
 
 void handle_active(Event e) {
   if (e.name == 'active') {
-    logInfo('handle_active',
-      "${e.name} = ${b(e.value)} (${e.descriptionText}) per ${eventSender(e)}"
-    )
+    logInfo('handle_active', [ "${eventSender(e)}: ${e.descriptionText}",
+      "${e.name}: ${b(e.value)}"
+    ])
   } else {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
   }
@@ -219,7 +217,25 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
     name: "${pbsgName}_testSequence",
     title: h3(header),
     type: 'textarea',
-    defaultValue: '["mon_Activate","wed_Activate","wed_Deactivate"]',  // HARDWIRE TEMPORARILY
+    defaultValue: toJson([
+      "mon_Activate",
+      "wed_Activate",
+      "wed_Deactivate",
+      "fri_Activate",
+      "fri_VswOff",
+      "thu_Deactivate",
+      "fri_VswOn",
+      "fri_VswPush",
+      "fri_VswPush",
+      "tue_VswOn",
+      "wed_VswOff",
+      "wed_Deactivate",
+      "fri_Activate",
+      "fri_VswPush",
+      "mon_VswPush",
+      "tue_VswOn",
+      "tue_Deactivate"
+    ]),  // HARDWIRE TEMPORARILY
     //defaultValue: testSequenceJson,
     required: true,
     width: 9,
@@ -407,7 +423,7 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
   String hdlr = "handle_${attribute}"
   logTrace(
     'subscribeHandler',
-    "Subscribing ${b(hdlr)} to ${devHued(issuer)} ${b(attribute)} events."
+    "Subscribing ${b(hdlr)} to ${devHued(issuer)} events."
   )
   subscribe(issuer, attribute, hdlr, ['filterEvents': true])
 }
@@ -444,7 +460,7 @@ void exercisePbsg() {
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
     if (pbsgName) {
-      logTrace('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
+      logWarn('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
       ChildDevW pbsg = getOrCreatePBSG(pbsgName)
       subscribeHandler(pbsg, 'numberOfButtons')
       subscribeHandler(pbsg, 'pushed')
