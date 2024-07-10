@@ -41,8 +41,7 @@ void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
     logInfo('handle_numberOfButtons', ['',
-      "Provider: ${eventSender(e)}",
-      "Ref: ${e.descriptionText}",
+      "${eventSender(e)}: ${e.descriptionText}",
       "${e.name}: ${b(val)}"
     ])
   } else {
@@ -101,7 +100,7 @@ void solicitPbsgNames() {
       '- The names will be used to create PBSG devices',
       '- Use ⏎ to save your entry '
     ].join('<br/>'),
-    defaultValue: 'weekdays',  // HARDWIRE TEMPORARILY
+    defaultValue: 'weekdays',  // HARDWIRED TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: true
@@ -122,7 +121,7 @@ void solicitButtonNames(String prefix) {
   input(
     name: "${prefix}buttons",
     title: h3(header),
-    defaultValue: 'mon tue wed thu fri',  // HARDWIRE TEMPORARILY
+    defaultValue: 'mon tue wed thu fri',  // HARDWIRED TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: dynamic
@@ -241,7 +240,7 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
       "mon_VswPush",
       "tue_VswOn",
       "tue_Deactivate"
-    ]),  // HARDWIRE TEMPORARILY
+    ]),  // HARDWIRED TEMPORARILY
     //defaultValue: testSequenceJson,
     required: true,
     width: 9,
@@ -296,8 +295,8 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   String nextAction = getNextAction(pbsgName)
   if (nextAction) {
     testSeqList.add(nextAction)  // Add the latest item to the ArrayList
-    removeNextAction(pbsgName)     // Force fresh data soliciation
-    removeTestSequence(pbsgName)   // Force fresh data soliciation
+    removeNextAction(pbsgName)     // Force fresh data solicitation
+    removeTestSequence(pbsgName)   // Force fresh data solicitation
   }
   // Update the JSON version of the ArrayList
   String testSequenceJson = toJson(testSeqList)
@@ -496,7 +495,7 @@ void exercisePbsg() {
       // Call the appropriate PBSG method per Test Action.
       testSeqList?.eachWithIndex{ testAction, index ->
         String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}"
-        String ref = "Demo-PBSG ${pbsgName} action ${index + 1} of ${actionCnt}"
+        String ref = "X ${pbsgName} action ${index + 1} of ${actionCnt}"
         logInfo('exercisePbsg', "${i(actionLabel)}: ${b(testAction)}")
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {

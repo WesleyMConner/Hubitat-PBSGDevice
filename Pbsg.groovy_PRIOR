@@ -143,8 +143,18 @@ void installed() {
   logWarn('installed', 'Initializing STATE and QUEUE PBSG entries.')
   STATE[DID()] = getEmptyPbsg()
   QUEUE[DID()] = new SynchronousQueue<Map>(true) // TRUE → FIFO
-  logInfo('installed', 'Launching Command Queue Handler.')
-  runInMillis(100, 'commandProcessor', [data: []])
+  logDebug('installed', 'LAUNCH cmdQueueHandler')
+  Map args =
+  runInMillis(500, 'cmdQueueHandler', [data: [ref: 'Entry via installed()']])
+  logDebug('installed', ['',
+    "DID(): ${DID()}",
+    "STATE: ${bMap(STATE)}",
+    "STATE[DID()]: ${STATE[DID()]}",
+    "QUEUE: ${bMap(QUEUE)}",
+    "QUEUE[DID()]: ${QUEUE[DID()]}"
+  ])
+  pauseExecution(750) // Allowing time for cmdQueueHandler() to start.
+  logDebug('installed', 'AT EXIT')
 }
 
 void uninstalled() {
@@ -159,12 +169,24 @@ void initialize() {
   logTrace('initialize', 'Initializing STATE and QUEUE PBSG entries.')
   STATE[DID()] = getEmptyPbsg()
   QUEUE[DID()] = new SynchronousQueue<Map>(true) // TRUE → FIFO
-  runInMillis(100, 'commandProcessor', [:])
+  logDebug('initialize', ['',
+    "DID(): ${DID()}",
+    "STATE: ${bMap(STATE)}",
+    "STATE[DID()]: ${STATE[DID()]}",
+    "QUEUE: ${bMap(QUEUE)}",
+    "QUEUE[DID()]: ${QUEUE[DID()]}"
+  ])
+  runInMillis(500, 'cmdQueueHandler', [data: [ref: 'Entry via initialize()']])
+  pauseExecution(750) // Allowing time for cmdQueueHandler() to start.
+  logTrace('initialize', 'Attempting PBSG Rebuild from configuration data.')
+  updatePbsgStructure(ref: 'Invoked by initialize()')
 }
 
 void updated() {
   // Called when a human uses the Hubitat GUI's Device drilldown page to edit
   // preferences (aka settings) AND presses 'Save Preferences'.
+  //   - If (and only if) devices settings have changed, the PBSG is rebuilt.
+  //   - On PBSG rebuild, anything pending in the commandQueue is dropped.
   logTrace('updated', 'Attempting PBSG Rebuild from configuration data.')
   updatePbsgStructure(parms: [ref: 'Invoked by updated()'])
 }
@@ -194,7 +216,6 @@ void enqueueCommand(Map command) {
 }
 
 void activate(String button, String ref = '') {
-  //if (button) {
   logDebug('activate', ['',
     "button: ${button}",
     "ref: ${ref}",
@@ -209,13 +230,9 @@ void activate(String button, String ref = '') {
   ]
   logTrace('activate', "queueing: ${bMap(command)}")
   enqueueCommand(command)
-  //} else {
-  //  logError('activate', 'Called with button=NULL')
-  //}
 }
 
 void deactivate(String button, String ref = '') {
-  //if (button) {
   Map command = [
     name: 'Deactivate',
     arg: button,
@@ -224,13 +241,9 @@ void deactivate(String button, String ref = '') {
   ]
   logTrace('deactivate', "queueing ${bMap(command)}")
   enqueueCommand(command)
-  //} else {
-  //  logError('deactivate', 'Called with button=NULL')
-  //}
 }
 
-void push(String button, String ref = '') {
-  //if (button) {
+void toggle(String button, String ref = '') {
   Map command = [
     name: 'Toggle',
     arg: button,
@@ -239,9 +252,6 @@ void push(String button, String ref = '') {
   ]
   logTrace('toggle', "queueing ${bMap(command)}")
   enqueueCommand(command)
-  //} else {
-  //  logError('push', 'Called with button=NULL')
-  //}
 }
 
 void testVswOn(String button, String ref = '') {
@@ -380,6 +390,7 @@ void populateNewPbsg(Map parms) {
   // Abstract
   //   Rebuild the PBSG per the structure in parms.newPbsg.
   //     * Updates STATE
+  //     * Replace cmdQueueHandler (focused on the new Version)
   //     * Update appropriate PBSG Attributes
   // Input
   //       parms.ref - Context string provided by caller
@@ -395,6 +406,7 @@ void populateNewPbsg(Map parms) {
     if (!pbsg.active && pbsg.dflt) {
       pbsgActivate(pbsg, pbsg.dflt, parms.ref)
     }
+    //-> logTrace('populateNewPbsg', 'Handing off to savePbsgState()')
     savePbsgState(pbsg: pbsg, ref: parms.ref)
   } else {
     logError('populateNewPbsg', 'Called with null parms.newPbsg')
@@ -405,6 +417,7 @@ void savePbsgState(Map parms) {
   // Abstract
   //   Update STATE for the PBSG and publish appropriate Attributes.
   //     * Updates STATE
+  //     * Replace cmdQueueHandler (focused on the new Version)
   //     * Update appropriate PBSG Attributes
   // Input
   //   parms.pbsg - In-memory PBSG for updating STATE.
@@ -423,7 +436,13 @@ void savePbsgState(Map parms) {
     Boolean activeChanged = (STATE[DID()].active != pbsg.active)
     Boolean cntChanged = (oldCnt != newCnt)
     STATE[DID()] = pbsg
+    //-> logTrace('populateNewPbsg', ['Replacing cmdQueueHandler for new PBSG version.',
+    //->   pbsg.version
+    //-> ])
+    //-> enqueueCommand('QUIT')  // Stop current cmdQueueHandler
     logTrace('activate', "queueing ${bMap(command)}")
+    //-> Map args = [ version: pbsg.version, ref: parms.ref ]
+    //-> runInMillis(500, 'cmdQueueHandler', [data: args]) // DFLT overwrite: true
     // Reconcile VSWs
     pbsg.buttonsList.each{ button ->
       if (pbsg.active == button) {
@@ -475,45 +494,50 @@ Boolean logVswActivity() {
   return settings.logVswActivity
 }
 
-void commandProcessor(Map parms) {
-  // Enter a loop to consume commands issued via QUEUE[DID()].
-  //   - If the versions agree, the command is executed.
-  //   - If the command is older, it is considered 'stale' and dropped.
-  //   - If the command is newer, an error is thrown.
-  logWarn('commandProcessor', 'QUEUE HANDLER LOOP STARTED')
-  logInfo('commandProcessor', "parms: ${parms}")
-  pauseExecution(1000)
+void cmdQueueHandler(Map parms) {
+  // Abstract
+  //   This handler compares its Version with the Version cited in the Command.
+  //     - If the command is older, it is considered 'stale' and skipped.
+  //     - If the versions agree, the command is executed.
+  //     - If the command is newer, an error is thrown. [This handler is stale.]
+  // Input
+  //   parms.version - Accept commands for this version only.
+  //       parms.ref - Context string provided by caller
+  logWarn('cmdQueueHandler', ['QUEUE HANDLER STARTED',
+    "parms: ${bMap(parms)}"
+  ])
   while (1) {
-    logInfo('commandProcessor', 'Awaiting next take().')
+    logInfo('cmdQueueHandler', 'Awaiting next take().')
     Map command = QUEUE[DID()].take()
     Map pbsg = STATE[DID()]
-    logInfo('commandProcessor', ['Processing command:',
+    logInfo('cmdQueueHandler', ['Processing command:',
       bMap(command)
     ])
     if (pbsg.version == command.version) {
+// Note: Version Strings can be compared (w/out parsing them back to Instants).
       switch(command.name) {
         case 'Activate':
           String button = command.arg
-          logTrace('commandProcessor', "case Activate for ${b(button)}.")
+          logTrace('cmdQueueHandler', "case Activate for ${b(button)}.")
           pbsgActivate(pbsg, button, command.ref)
           savePbsgState(pbsg: pbsg, ref: command.ref)
           break
         case 'Deactivate':
           String button = command.arg
-          logTrace('commandProcessor', "case Deactivate for ${b(button)}.")
+          logTrace('cmdQueueHandler', "case Deactivate for ${b(button)}.")
           pbsgDeactivate(pbsg, button, command.ref)
           savePbsgState(pbsg: pbsg, ref: command.ref)
           break
         case 'Toggle':
           String button = command.arg
-          logTrace('commandProcessor', "case Toggle for ${b(button)}.")
+          logTrace('cmdQueueHandler', "case Toggle for ${b(button)}.")
           if (pbsg.active == button) {
             if (button == pbsg.dflt) {
-              logWarn('commandProcessor', ["Ignoring 'Toggle ${b(button)}'",
+              logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
                 "The button is 'on' AND is also the default button"
               ])
             } else {
-              logInfo('commandProcessor', "Toggling ${b(button) 'off'}")
+              logInfo('cmdQueueHandler', "Toggling ${b(button) 'off'}")
               pbsg.lifo.push(pbsg.active)
               pbsg.active = null
               if (pbsg.dflt) {
@@ -524,30 +548,31 @@ void commandProcessor(Map parms) {
             }
           } else {
             if (pbsg.lifo.contains(button)) {
-              logInfo('commandProcessor', "Toggling ${b(button) 'on'}")
+              logInfo('cmdQueueHandler', "Toggling ${b(button) 'on'}")
               if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
               pbsg.lifo.removeAll([button])
               pbsg.active = button
               savePbsgState(pbsg: pbsg, ref: command.ref)
             } else {
-              logWarn('commandProcessor', ["Ignoring 'Toggle ${b(button)}'",
+              logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
                 "The button is not found. (PBSG: ${bMap(pbsg)})"
               ])
             }
           }
           break
         default:
-          logError('commandProcessor', "Unknown Command: ${command}")
+          logError('cmdQueueHandler', "Unexpected Command: ${command}")
       }
-    } else if (command.version < parms.version) {
-      logWarn('commandProcessor', ['Dropping stale command.',
-        "command.version: ${b(command.version)}",
-        "   pbsg.version: ${b(pbsg.version)}"
+    } else if (command.vesion < parms.version) {
+      logWarn('cmdQueueHandler', ["PBSG Version (${parms.version})",
+        'Ignoring stale command',
+        bMap(command)
       ])
     } else {
-      logError('commandProcessor', ['PBSG is stale?!',
-        "command.version: ${b(command.version)}",
-        "   pbsg.version: ${b(pbsg.version)}"
+      logError('cmdQueueHandler', ['UNEXPECTED CONDITION',
+        "With PBSG Version (${parms.version})",
+        'Received command that is NEWER than the PBSG Version.',
+        bMap(command)
       ])
     }
   }
@@ -555,10 +580,9 @@ void commandProcessor(Map parms) {
 
 Map pbsgActivate(Map pbsg, String button, String ref = null) {
   if (pbsg?.active == button) {
-    logInfo(
-      'pbsgActivate',
-      "Ignoring 'Activate ${b(button)}'. The button is already active."
-    )
+    logInfo('pbsgActivate', ["Ignoring 'Activate ${b(button)}'",
+      'The button is already active.'
+    ])
   } else if (pbsg.lifo.contains(button)) {
     logInfo('pbsgActivate', "Activating ${b(button)}")
     if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
@@ -575,15 +599,13 @@ Map pbsgActivate(Map pbsg, String button, String ref = null) {
 
 Map pbsgDeactivate(Map pbsg, String button, String ref) {
   if (pbsg.active != button) {
-    logWarn(
-      'pbsgDeactivate',
-      "Ignoring 'Deactivate ${b(button)}'. The button is not active."
-    )
+    logWarn('pbsgDeactivate', ["Ignoring 'Deactivate ${b(button)}'",
+      'The button is not active.'
+    ])
   } else if (pbsg.active == pbsg.dflt) {
-    logWarn(
-      'pbsgDeactivate',
-      "Ignoring 'Deactivate ${b(button)}. The button is the default button."
-    )
+    logWarn('pbsgDeactivate', ["Ignoring 'Deactivate ${b(button)}'",
+      'The button is the default button'
+    ])
   } else if (pbsg.active == button) {
     logInfo('pbsgDeactivate', "Deactivating ${b(button)}")
     pbsg.lifo.push(pbsg.active)
@@ -707,8 +729,7 @@ String pbsg_StateHtml(Map pbsg) {
   if (pbsg) {
     table << '<span style="display:inline-table;">'
     table << '<table><tr>'
-    //table << "<td>${devHued(device)}:&nbsp;</td>"
-    //->table << "<td>${XXX}:&nbsp;</td>"
+    table << "<td>${devHued(device)}:&nbsp;</td>"
     table << tdBordered( pbsg.active ? buttonState(pbsg.active) : 'null' )
     table << '<td>&nbsp;←&nbsp;</td>'
     pbsg.lifo?.reverse().each { button ->
@@ -727,6 +748,10 @@ ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
   String name = dni.replaceAll('_', ' ')
   ChildDevW d = getChildDevice(dni)
   if (!d) {
+    logWarn(
+      'getOrCreateVswWithToggle',
+      "Creating VswWithToggle instance: ${b(dni)}"
+    )
     d = addChildDevice(
       'WesMC',               // namespace
       'VswWithToggle',       // typeName
@@ -736,10 +761,6 @@ ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
         name: name,          // "PBSG <pbsgName>"
         label: name          // "PBSG <pbsgName>"
       ]
-    )
-    logWarn(
-      'getOrCreateVswWithToggle',
-      "Created new VswWithToggle instance: ${devHued(d)}"
     )
   }
   return d

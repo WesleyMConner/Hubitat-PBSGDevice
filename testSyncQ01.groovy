@@ -107,14 +107,18 @@ void installed() {
   q = new SynchronousQueue<Map>(true)
   logInfo('installed', 'Queue created.')
   // NOTE: Any shorter than 500ms seems to be an issue.
-  runInMillis(500, 'consumer', [data: [ref: "Single Consumer"]])
+  //runInMillis(500, 'consumer', [data: [ref: "Single Consumer"]])
+  runIn(1, 'consumer', [data: [ref: "Single Consumer"]])
   logInfo('installed', 'Consumer thread requested.')
   // Throw stuff at the consumer and see what happens.
   Map args1 = [ range: 1..30, name: 'alpha']
   Map args2 = [ range: 31..60, name: 'beta']
   Map args3 = [ range: 61..75, name: 'gamma']
-  runInMillis(750, 'producer1', [data: args1])
-  runInMillis(750, 'producer2', [data: args2])
-  runInMillis(750, 'producer3', [data: args3])
+  //runInMillis(750, 'producer1', [data: args1])
+  //runInMillis(750, 'producer2', [data: args2])
+  //runInMillis(750, 'producer3', [data: args3])
+  runIn(2, 'producer1', [data: args1])
+  runIn(2, 'producer2', [data: args2])
+  runIn(2, 'producer3', [data: args3])
   logInfo('installed', 'Producer thread requested')
 }

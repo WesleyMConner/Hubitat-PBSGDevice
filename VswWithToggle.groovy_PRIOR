@@ -36,7 +36,7 @@ metadata {
     importUrl: 'https://github.com/WesleyMConner/Hubitat-PBSGLibrary',
     singleThreaded: 'false'
   ) {
-    capability "Switch"          // Attribtes:
+    capability "Switch"          // Attributes:
                                  //   - switch: ['on'|'off']
                                  // Commands: on(), off()
     capability "Momentary"       // Commands: push()
@@ -47,9 +47,7 @@ metadata {
 // COMMANDS FOR ADVERTISED CAPABILITIES
 
 void on(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('on', "Received on() w/ parms: ${parms}")
-  }
+  if (parent.logVswActivity()) { logTrace('on', 'Received on()') }
   Map command = [
     name: 'Activate',
     arg: button,
@@ -61,9 +59,7 @@ void on(Map parms = null) {
 }
 
 void off(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('off', "Received off() w/ parms: ${parms}")
-  }
+  if (parent.logVswActivity()) { logTrace('off', 'Received off()') }
   Map command = [
     name: 'Deactivate',
     arg: button,
@@ -75,9 +71,7 @@ void off(Map parms = null) {
 }
 
 void push(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('push', "Received push() w/ parms: ${parms}")
-  }
+  if (parent.logVswActivity()) { logTrace('push', 'Received push()') }
   Map command = [
     name: 'Toggle',
     arg: button,
@@ -104,7 +98,7 @@ void parse(ArrayList actions) {
   ArrayList allowedActions = ['switch']
   actions.each{ action ->
     if (parent.logVswActivity()) {
-      logTrace('parse', ['Processing Action', bMap(action)])
+      logTrace('parse', ['Received action:', bMap(action)])
     }
     if (action?.name in allowedActions) { sendEvent(action) }
   }
