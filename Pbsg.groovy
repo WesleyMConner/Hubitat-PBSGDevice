@@ -142,7 +142,19 @@ void installed() {
   // Called when a bare device is first constructed.
   logWarn('installed', 'Initializing STATE and QUEUE PBSG entries.')
   STATE[DID()] = getEmptyPbsg()
-  QUEUE[DID()] = new SynchronousQueue(true) // TRUE → FIFO
+  QUEUE[DID()] = new SynchronousQueue<Map>(true) // TRUE → FIFO
+  logDebug('installed', 'LAUNCH cmdQueueHandler')
+  Map args =
+  runInMillis(500, 'cmdQueueHandler', [data: [ref: 'Entry via installed()']])
+  logDebug('installed', ['',
+    "DID(): ${DID()}",
+    "STATE: ${bMap(STATE)}",
+    "STATE[DID()]: ${STATE[DID()]}",
+    "QUEUE: ${bMap(QUEUE)}",
+    "QUEUE[DID()]: ${QUEUE[DID()]}"
+  ])
+  pauseExecution(750) // Allowing time for cmdQueueHandler() to start.
+  logDebug('installed', 'AT EXIT')
 }
 
 void uninstalled() {
@@ -155,9 +167,17 @@ void uninstalled() {
 void initialize() {
   // Called on hub startup (per capability "Initialize").
   logTrace('initialize', 'Initializing STATE and QUEUE PBSG entries.')
-  Map pbsg = getEmptyPbsg()
-  STATE[DID()] = pbsg
-  QUEUE[DID()] = new SynchronousQueue(true)
+  STATE[DID()] = getEmptyPbsg()
+  QUEUE[DID()] = new SynchronousQueue<Map>(true) // TRUE → FIFO
+  logDebug('initialize', ['',
+    "DID(): ${DID()}",
+    "STATE: ${bMap(STATE)}",
+    "STATE[DID()]: ${STATE[DID()]}",
+    "QUEUE: ${bMap(QUEUE)}",
+    "QUEUE[DID()]: ${QUEUE[DID()]}"
+  ])
+  runInMillis(500, 'cmdQueueHandler', [data: [ref: 'Entry via initialize()']])
+  pauseExecution(750) // Allowing time for cmdQueueHandler() to start.
   logTrace('initialize', 'Attempting PBSG Rebuild from configuration data.')
   updatePbsgStructure(ref: 'Invoked by initialize()')
 }
@@ -192,13 +212,19 @@ void config(String jsonPrefs, String ref = '') {
 }
 
 void activate(String button, String ref = '') {
+  logDebug('activate', ['',
+    "button: ${button}",
+    "ref: ${ref}",
+    "STATE[DID()].version: ${STATE[DID()].version}",
+    "QUEUE[DID()]: ${QUEUE[DID()]}"
+  ])
   Map command = [
     name: 'Activate',
     arg: button,
     ref: ref,
     version: STATE[DID()].version
   ]
-  logTrace('activate', "Queing ${bMap(command)}")
+  logTrace('activate', "queueing: ${bMap(command)}")
   QUEUE[DID()].put(command)
 }
 
@@ -209,7 +235,7 @@ void deactivate(String button, String ref = '') {
     ref: ref,
     version: STATE[DID()].version
   ]
-  logTrace('deactivate', "Queing ${bMap(command)}")
+  logTrace('deactivate', "queueing ${bMap(command)}")
   QUEUE[DID()].put(command)
 }
 
@@ -220,7 +246,7 @@ void toggle(String button, String ref = '') {
     ref: ref,
     version: timestampAsString()
   ]
-  logTrace('toggle', "Queing ${bMap(command)}")
+  logTrace('toggle', "queueing ${bMap(command)}")
   QUEUE[DID()].put(command)
 }
 
@@ -362,9 +388,8 @@ void populateNewPbsg(Map parms) {
   // Input
   //   parms.newPbsg - Initialized PBSG Map w/ structural fields populated.
   //       parms.ref - Context string provided by caller
-  Map pbsg = null
   if (parms.newPbsg) {
-    pbsg = airGap(parms.newPbsg)
+    Map pbsg = airGap(parms.newPbsg)
     pbsg.buttonsList.each { button ->
       ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
       pbsg.lifo.push(button)
@@ -404,9 +429,13 @@ void savePbsgState(Map parms) {
     Boolean activeChanged = (STATE[DID()].active != pbsg.active)
     Boolean cntChanged = (oldCnt != newCnt)
     STATE[DID()] = pbsg
-    logTrace('populateNewPbsg', 'Replacing cmdQueueHandler for new PBSG version.')
-    Map args = [ version: pbsg.version, ref: parms.ref ]
-    runInMillis(500, 'cmdQueueHandler', [data: args, overwrite: true])
+    //-> logTrace('populateNewPbsg', ['Replacing cmdQueueHandler for new PBSG version.',
+    //->   pbsg.version
+    //-> ])
+    //-> QUEUE[DID()].put('QUIT')  // Stop current cmdQueueHandler
+    logTrace('activate', "queueing ${bMap(command)}")
+    //-> Map args = [ version: pbsg.version, ref: parms.ref ]
+    //-> runInMillis(500, 'cmdQueueHandler', [data: args]) // DFLT overwrite: true
     // Reconcile VSWs
     pbsg.buttonsList.each{ button ->
       if (pbsg.active == button) {
@@ -467,76 +496,73 @@ void cmdQueueHandler(Map parms) {
   // Input
   //   parms.version - Accept commands for this version only.
   //       parms.ref - Context string provided by caller
+  logWarn('cmdQueueHandler', ['QUEUE HANDLER STARTED',
+    "parms: ${bMap(parms)}"
+  ])
   while (1) {
+    logInfo('cmdQueueHandler', 'Awaiting next take().')
     Map command = QUEUE[DID()].take()
-    // Version Strings can be compared (w/out parsing them back to Instants).
-    //   - Long durationMs = Duration.between(command.version, parms.version)
-    //                               .toMillis()
-    if (command.version == parms.version) {
-      if (command.version != parms.version) {
-        logWarn('cmdQueueHandler', [ "Version: ${parms.version}, dropping stale:",
-          "command: ${command}"
-        ])
-      } else {
-        switch(command.name) {
-          case 'Activate':
-            String button = command.arg
-            Map pbsg = STATE[DID()]
-            pbsgActivate(pbsg, button, command.ref)
-            logTrace('cmdQueueHandler', 'case Activate handoff to savePbsgState()')
-            savePbsgState(pbsg: pbsg, ref: command.ref)
-            break
-          case 'Deactivate':
-            String button = command.arg
-            Map pbsg = STATE[DID()]
-            pbsgDeactivate(pbsg, button, command.ref)
-            logTrace('cmdQueueHandler', 'case Deactivate handoff to savePbsgState()')
-            savePbsgState(pbsg: pbsg, ref: command.ref)
-            break
-          case 'Toggle':
-            String button = command.arg
-            Map pbsg = STATE[DID()]
-            if (pbsg.active == button) {
-              if (button == pbsg.dflt) {
-                logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
-                  "The button is 'on' AND is also the default button"
-                ])
-              } else {
-                logInfo('cmdQueueHandler', "Toggling ${b(button) 'off'}")
-                pbsg.lifo.push(pbsg.active)
-                pbsg.active = null
-                if (pbsg.dflt) {
-                  pbsg.lifo.removeAll([pbsg.dflt])
-                  pbsg.active = pbsg.dflt
-                }
-                savePbsgState(pbsg: pbsg, ref: command.ref)
-              }
+    Map pbsg = STATE[DID()]
+    logInfo('cmdQueueHandler', "Processing command: ${command}.")
+    if (pbsg.version == command.version) {
+// Note: Version Strings can be compared (w/out parsing them back to Instants).
+      switch(command.name) {
+        case 'Activate':
+          String button = command.arg
+          logTrace('cmdQueueHandler', "case Activate for ${b(button)}.")
+          pbsgActivate(pbsg, button, command.ref)
+          savePbsgState(pbsg: pbsg, ref: command.ref)
+          break
+        case 'Deactivate':
+          String button = command.arg
+          logTrace('cmdQueueHandler', "case Deactivate for ${b(button)}.")
+          pbsgDeactivate(pbsg, button, command.ref)
+          savePbsgState(pbsg: pbsg, ref: command.ref)
+          break
+        case 'Toggle':
+          String button = command.arg
+          logTrace('cmdQueueHandler', "case Toggle for ${b(button)}.")
+          if (pbsg.active == button) {
+            if (button == pbsg.dflt) {
+              logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
+                "The button is 'on' AND is also the default button"
+              ])
             } else {
-              if (pbsg.lifo.contains(button)) {
-                logInfo('cmdQueueHandler', "Toggling ${b(button) 'on'}")
-                if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
-                pbsg.lifo.removeAll([button])
-                pbsg.active = button
-                savePbsgState(pbsg: pbsg, ref: command.ref)
-              } else {
-                logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
-                  "The button is not found. (PBSG: ${bMap(pbsg)})"
-                ])
+              logInfo('cmdQueueHandler', "Toggling ${b(button) 'off'}")
+              pbsg.lifo.push(pbsg.active)
+              pbsg.active = null
+              if (pbsg.dflt) {
+                pbsg.lifo.removeAll([pbsg.dflt])
+                pbsg.active = pbsg.dflt
               }
+              savePbsgState(pbsg: pbsg, ref: command.ref)
             }
-            break
-          default:
-            logError('cmdQueueHandler', "Unexpected Command: ${command}")
-        }
+          } else {
+            if (pbsg.lifo.contains(button)) {
+              logInfo('cmdQueueHandler', "Toggling ${b(button) 'on'}")
+              if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
+              pbsg.lifo.removeAll([button])
+              pbsg.active = button
+              savePbsgState(pbsg: pbsg, ref: command.ref)
+            } else {
+              logWarn('cmdQueueHandler', ["Ignoring 'Toggle ${b(button)}'",
+                "The button is not found. (PBSG: ${bMap(pbsg)})"
+              ])
+            }
+          }
+          break
+        default:
+          logError('cmdQueueHandler', "Unexpected Command: ${command}")
       }
     } else if (command.vesion < parms.version) {
-      logWarn('cmdQueueHandler', ["Handler Version (${parms.version})",
+      logWarn('cmdQueueHandler', ["PBSG Version (${parms.version})",
         'Ignoring stale command',
         bMap(command)
       ])
     } else {
-      logError('cmdQueueHandler', ["Handler Version (${parms.version})",
-        'Received command that is newer than the handler.',
+      logError('cmdQueueHandler', ['UNEXPECTED CONDITION',
+        "With PBSG Version (${parms.version})",
+        'Received command that is NEWER than the PBSG Version.',
         bMap(command)
       ])
     }
@@ -545,17 +571,17 @@ void cmdQueueHandler(Map parms) {
 
 Map pbsgActivate(Map pbsg, String button, String ref = null) {
   if (pbsg?.active == button) {
-    logInfo('cmdQueueHandler', ["Ignoring 'Activate ${b(button)}'",
+    logInfo('pbsgActivate', ["Ignoring 'Activate ${b(button)}'",
       'The button is already active.'
     ])
   } else if (pbsg.lifo.contains(button)) {
-    logInfo('cmdQueueHandler', "Activating ${b(button)}")
+    logInfo('pbsgActivate', "Activating ${b(button)}")
     if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
     pbsg.lifo.removeAll([button])
     pbsg.active = button
     savePbsgState(pbsg: pbsg, ref: ref)
   } else {
-    logWarn('cmdQueueHandler', ["Ignoring 'Activate ${b(button)}'",
+    logWarn('pbsgActivate', ["Ignoring 'Activate ${b(button)}'",
       "The button is not found. (PBSG: ${bMap(pbsg)})"
     ])
   }
@@ -564,15 +590,15 @@ Map pbsgActivate(Map pbsg, String button, String ref = null) {
 
 Map pbsgDeactivate(Map pbsg, String button, String ref) {
   if (pbsg.active != button) {
-    logWarn('cmdQueueHandler', ["Ignoring 'Deactivate ${b(button)}'",
+    logWarn('pbsgDeactivate', ["Ignoring 'Deactivate ${b(button)}'",
       'The button is not active.'
     ])
   } else if (pbsg.active == pbsg.dflt) {
-    logWarn('cmdQueueHandler', ["Ignoring 'Deactivate ${b(button)}'",
+    logWarn('pbsgDeactivate', ["Ignoring 'Deactivate ${b(button)}'",
       'The button is the default button'
     ])
   } else if (pbsg.active == button) {
-    logInfo('cmdQueueHandler', "Deactivating ${b(button)}")
+    logInfo('pbsgDeactivate', "Deactivating ${b(button)}")
     pbsg.lifo.push(pbsg.active)
     pbsg.active = null
     if (pbsg.dflt) {

@@ -57,69 +57,83 @@ Map TestBed3() {
   ) {
     app.updateLabel("TestBed3 (${app.id})")
     section{
-      paragraph h1('Passing Maps Test')
-      paragraph h2('No Insulation')
-      Map a = [a: 'one', b: 'two', c: 'three']
-      paragraph "a: ${a}"
-      appendToMap(a)
-      paragraph "a: ${a}"
-      removeFromMap(a)
-      paragraph "a: ${a}"
-      alterMap(a)
-      paragraph "a: ${a}"
-      paragraph h2('Insulated Copy')
-      a = [a: 'one', b: 'two', c: 'three']
-      paragraph "a: ${a}"
-      isolatedAppend(a)
-      paragraph "a: ${a}"
-      isolatedRemove(a)
-      paragraph "a: ${a}"
-      isolatedAlter(a)
-      paragraph "a: ${a}"
+      paragraph h1('ISO8601 Date Tests')
+      Instant tOut1 = java.time.Instant.now()
+      Instant tIn1 = Instant.parse('2024-07-05T17:37:50.371291Z')
+      Long durationMs1 = Duration.between(tIn1, tOut1).toMillis();
+      paragraph "in: ${tIn1}, out: ${tOut1}, duration: ${durationMs1} ms"
+      paragraph "duration: ${durationMs1/1000} s"
+
+      Instant tIn2 = java.time.Instant.now()
+      pauseExecution(150)
+      Instant tOut2 = java.time.Instant.now()
+      Long durationMs2 = Duration.between(tIn2, tOut2).toMillis();
+      paragraph "in: ${tIn2}, out: ${tOut2}, duration: ${durationMs2} ms"
+      paragraph "duration: ${durationMs2/1000} s"
+
+      paragraph h1('Click Done to begin Thread Test')
+      paragraph i('Review test output in Hubitat logs.')
     }
   }
 }
 
-void appendToMap(Map a) {
-  x = a
-  x << [g: 'seven']
-  paragraph "In appendToMap, x: ${x}"
+void producer(Map parms) {
+  logInfo('producer', "parms: ${bMap(parms)}")
+  ArrayList log = ['']
+  // logInfo('producer',
+  //   "${parms.producer} has range: ${parms.range} (${getObjectClassName(parms.range)})"
+  // )
+  ArrayList cmds = parms.range.collect { e ->
+    [name: parms.name, value: "${e}", ref: "${java.time.Instant.now()}"]
+  }
+  //logInfo('producer', "cmds: ${cmds}")
+  cmds.each{ command ->
+    pauseExecution(parms.pause)
+    q.put(command)
+    log << command
+  }
+  logInfo('producer', log)
 }
 
-void removeFromMap(Map a) {
-  x = a
-  x.findAll { k, v -> (k == 'b') } each { k, v -> x.remove k }
-  paragraph "In removeFromMap, x: ${x}"
+void producer1(Map parms) {
+  parms << [producer: 'producer1']
+  producer(parms)
 }
 
-void alterMap(Map a) {
-  x = a
-  x.b = 'TWO'
-  paragraph "In alterMap, x: ${x}"
+void producer2(Map parms) {
+  parms << [producer: 'producer2']
+  producer(parms)
 }
 
-Map copyMap (Map x) {
-  return x.findAll { k, v -> (k) }
+void producer3(Map parms) {
+  parms << [producer: 'producer3']
+  producer(parms)
 }
 
-void isolatedAppend(Map x) {
-  localX = copyMap(x)
-  localX << [g: 'seven']
-  paragraph "In appendToMap, localX: ${localX}"
+void consumer(Map parms) {
+  logInfo('consumer', "parms: ${bMap(parms)}")
+  ArrayList log = ['']
+  ArrayList range = 1..75  // Tactically, limit looping to 75
+  range.each { e ->
+    Map cmd = q.take()
+    Instant tOut = java.time.Instant.now()
+    Instant tIn = Instant.parse(cmd.ref)
+    Long qDuration = Duration.between(tIn, tOut).toMillis();
+    log << [ ageInMs: qDuration, *:cmd ]
+  }
+  logInfo('consumer', log)
 }
-
-void isolatedRemove(Map x) {
-  localX = copyMap(x)
-  localX.findAll { k, v -> (k == 'b') } each { k, v -> localX.remove k }
-  paragraph "In removeFromMap, localX: ${localX}"
-}
-
-void isolatedAlter(Map x) {
-  localX = copyMap(x)
-  localX.b = 'TWO'
-  paragraph "In alterMap, localX: ${localX}"
-}
-
 void installed() {
-  logInfo('installed', 'TBD ...')
+  logInfo('installed', 'Creating queue ...')
+  q = new SynchronousQueue<Map>()
+  logInfo('installed', 'Queue created.')
+  runInMillis(1000, 'consumer', [data: [ref: "Single Consumer"]])
+  logInfo('installed', 'Consumer thread requested.')
+  Map args1 = [ range: 1..30, name: 'alpha', pause: 150 ]
+  Map args2 = [ range: 31..60, name: 'beta', pause: 200 ]
+  Map args3 = [ range: 61..75, name: 'gamma', pause: 175 ]
+  runInMillis(1000, 'producer1', [data: args1])
+  runInMillis(1000, 'producer2', [data: args2])
+  runInMillis(1000, 'producer3', [data: args3])
+  logInfo('installed', 'Producer thread requested')
 }

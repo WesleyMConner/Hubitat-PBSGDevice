@@ -401,6 +401,11 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
   // Device Network Identifiers DO NOT include white space.
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
   ChildDevW d = getChildDevice(dni)
+logDebug('getOrCreatePbsg', ['',
+  "DNI: ${dni}",
+  "name: ${name}",
+  "d: ${d}"
+])
   if (d) {
     logTrace('getOrCreatePBSG', "Using existing ${devHued(d)}")
   } else {
@@ -498,19 +503,19 @@ void exercisePbsg() {
           String reference = "${index}: ${testAction}"
           switch (action) {
             case 'Activate':
-              pbsg.activate(target, "DemoPbsg ${reference}")
+              pbsg.activate(target, "DemoPbsg ${actionLabel}")
               break
             case 'Deactivate':
-              pbsg.deactivate(target, "DemoPbsg ${reference}")
+              pbsg.deactivate(target, "DemoPbsg ${actionLabel}")
               break
             case 'VswOn':
-              pbsg.testVswOn(target, "DemoPbsg ${reference}")
+              pbsg.testVswOn(target, "DemoPbsg ${actionLabel}")
               break
             case 'VswOff':
-              pbsg.testVswOff(target, "DemoPbsg ${reference}")
+              pbsg.testVswOff(target, "DemoPbsg ${actionLabel}")
               break
             case 'VswPush':
-              pbsg.testVswPush(target, "DemoPbsg ${reference}")
+              pbsg.testVswPush(target, "DemoPbsg ${actionLabel}")
               break
             default:
               logError(

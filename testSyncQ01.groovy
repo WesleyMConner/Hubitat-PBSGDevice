@@ -60,7 +60,7 @@ Map TestSyncQ01() {
       paragraph h1('ISO8601 Date Tests')
       Instant tOut1 = java.time.Instant.now()
       Instant tIn1 = Instant.parse('2024-07-05T17:37:50.371291Z')
-      Long durationMs1 = java.time.Duration.between(tIn1, tOut1).toMillis();
+      Long durationMs1 = Duration.between(tIn1, tOut1).toMillis();
       paragraph "in: ${tIn1}, out: ${tOut1}, duration: ${durationMs1} ms"
       paragraph "duration: ${durationMs1/1000} s"
       Instant tIn2 = java.time.Instant.now()
@@ -104,7 +104,7 @@ void consumer(Map parms) {
 
 void installed() {
   logInfo('installed', 'Creating queue ...')
-  q = new SynchronousQueue<Map>()
+  q = new SynchronousQueue<Map>(true)
   logInfo('installed', 'Queue created.')
   // NOTE: Any shorter than 500ms seems to be an issue.
   runInMillis(500, 'consumer', [data: [ref: "Single Consumer"]])
