@@ -46,40 +46,40 @@ metadata {
 
 // COMMANDS FOR ADVERTISED CAPABILITIES
 
-void on(String ref = null) {
+void on(Map parms = null) {
   if (parent.logVswActivity()) { logTrace('on', 'Received on()') }
   Map command = [
     name: 'Activate',
     arg: button,
-    ref: i(ref),
-    version: STATE[parent.DID()].version
+    ref: i(parms?.ref) ?: '',
+    version: parms?.version ?: ''
   ]
   logTrace('on', "Queing ${bMap(command)}")
-  QUEUE[parent.DID()].put(command)
+  parent.enqueueCommand(command)
 }
 
-void off(String ref = null) {
+void off(Map parms = null) {
   if (parent.logVswActivity()) { logTrace('off', 'Received off()') }
   Map command = [
     name: 'Deactivate',
     arg: button,
-    ref: i(ref),
-    version: STATE[parent.DID()].version
+    ref: i(parms?.ref) ?: '',
+    version: parms?.version ?: ''
   ]
   logTrace('off', "Queing ${bMap(command)}")
-  QUEUE[parent.DID()].put(command)
+  parent.enqueueCommand(command)
 }
 
-void push(String ref = null) {
+void push(Map parms = null) {
   if (parent.logVswActivity()) { logTrace('push', 'Received push()') }
   Map command = [
     name: 'Toggle',
     arg: button,
-    ref: i(ref),
-    version: STATE[parent.DID()].version
+    ref: i(parms?.ref) ?: '',
+    version: parms?.version ?: ''
   ]
   logTrace('push', "Queing ${bMap(command)}")
-  QUEUE[parent.DID()].put(command)
+  parent.enqueueCommand(command)
 }
 
 // EXPECT PARENT TO MANIPULATE THIS DEVICE

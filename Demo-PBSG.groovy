@@ -63,7 +63,11 @@ void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     //Map pbsg = fromJson(e.value)
     Map pbsg = parseJson(e.value)
-    logInfo('handle_jsonPbsg', getChildDevice(e.displayName).pbsg_StateHtml(pbsg))
+    //logInfo('handle_jsonPbsg', getChildDevice(e.displayName).pbsg_StateHtml(pbsg))
+    logInfo('handle_jsonPbsg', [ "${eventSender(e)}: ${e.descriptionText}",
+      (getChildDevice(e.displayName).pbsg_StateHtml(pbsg)),
+      bMap(pbsg)
+    ])
   } else {
     logError('handle_jsonPbsg', "Unexpected event: ${eventDetails(e)}")
   }
@@ -401,11 +405,6 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
   // Device Network Identifiers DO NOT include white space.
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
   ChildDevW d = getChildDevice(dni)
-logDebug('getOrCreatePbsg', ['',
-  "DNI: ${dni}",
-  "name: ${name}",
-  "d: ${d}"
-])
   if (d) {
     logTrace('getOrCreatePBSG', "Using existing ${devHued(d)}")
   } else {
@@ -419,7 +418,7 @@ logDebug('getOrCreatePbsg', ['',
         label: name          // "PBSG <pbsgName>"
       ]
     )
-    logTrace('getOrCreatePBSG', "Created new ${devHued(d)}")
+    logWarn('getOrCreatePBSG', "Created new ${devHued(d)}")
   }
   return d
 }
@@ -465,7 +464,7 @@ void exercisePbsg() {
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
     if (pbsgName) {
-      logWarn('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
+      //-> logWarn('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
       ChildDevW pbsg = getOrCreatePBSG(pbsgName)
       subscribeHandler(pbsg, 'numberOfButtons')
       subscribeHandler(pbsg, 'pushed')
@@ -474,7 +473,7 @@ void exercisePbsg() {
       //----> subscribeHandler(pbsg, 'jsonLifo')
       // Assemble solicited configure data (for the current PBSG) and use it to
       // configure the current PBSG via 'pbsg.parse(String json)'.
-      logInfo('exercisePbsg', "Configure PBSG ${pbsgName}")
+      logInfo('exercisePbsg', "Configure PBSG ${b(pbsgName)}")
       String prefix = "${pbsgName}_"
       Map prefs = [
         buttons: getButtonNames(prefix).join(' '),
@@ -494,7 +493,8 @@ void exercisePbsg() {
       Integer actionCnt = testSeqList.size()
       // Call the appropriate PBSG method per Test Action.
       testSeqList?.eachWithIndex{ testAction, index ->
-        String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}:"
+        String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}"
+        String ref = "X ${pbsgName} action ${index + 1} of ${actionCnt}"
         logInfo('exercisePbsg', "${i(actionLabel)}: ${b(testAction)}")
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
@@ -503,19 +503,19 @@ void exercisePbsg() {
           String reference = "${index}: ${testAction}"
           switch (action) {
             case 'Activate':
-              pbsg.activate(target, "DemoPbsg ${actionLabel}")
+              pbsg.activate(target, ref)
               break
             case 'Deactivate':
-              pbsg.deactivate(target, "DemoPbsg ${actionLabel}")
+              pbsg.deactivate(target, ref)
               break
             case 'VswOn':
-              pbsg.testVswOn(target, "DemoPbsg ${actionLabel}")
+              pbsg.testVswOn(target, ref)
               break
             case 'VswOff':
-              pbsg.testVswOff(target, "DemoPbsg ${actionLabel}")
+              pbsg.testVswOff(target, ref)
               break
             case 'VswPush':
-              pbsg.testVswPush(target, "DemoPbsg ${actionLabel}")
+              pbsg.testVswPush(target, ref)
               break
             default:
               logError(

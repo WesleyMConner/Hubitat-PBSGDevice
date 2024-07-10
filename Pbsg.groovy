@@ -211,6 +211,10 @@ void config(String jsonPrefs, String ref = '') {
   updatePbsgStructure(config: jsonPrefs, ref: 'Invoked by config()')
 }
 
+void enqueueCommand(Map command) {
+  QUEUE[DID()].put(command)
+}
+
 void activate(String button, String ref = '') {
   logDebug('activate', ['',
     "button: ${button}",
@@ -225,7 +229,7 @@ void activate(String button, String ref = '') {
     version: STATE[DID()].version
   ]
   logTrace('activate', "queueing: ${bMap(command)}")
-  QUEUE[DID()].put(command)
+  enqueueCommand(command)
 }
 
 void deactivate(String button, String ref = '') {
@@ -236,7 +240,7 @@ void deactivate(String button, String ref = '') {
     version: STATE[DID()].version
   ]
   logTrace('deactivate', "queueing ${bMap(command)}")
-  QUEUE[DID()].put(command)
+  enqueueCommand(command)
 }
 
 void toggle(String button, String ref = '') {
@@ -247,22 +251,25 @@ void toggle(String button, String ref = '') {
     version: timestampAsString()
   ]
   logTrace('toggle', "queueing ${bMap(command)}")
-  QUEUE[DID()].put(command)
+  enqueueCommand(command)
 }
 
 void testVswOn(String button, String ref = '') {
   logTrace('testVswOn', "Executing device.on() for ${b(button)}.")
-  getVswForButton(button).on()
+  Map args = [ref: ref, version: STATE[DID()].version]
+  getVswForButton(button).on(args)
 }
 
 void testVswOff(String button, String ref = '') {
   logTrace('testVswOff', "Turning device.off() for ${b(button)}.")
-  getVswForButton(button).off()
+  Map args = [ref: ref, version: STATE[DID()].version]
+  getVswForButton(button).off(args)
 }
 
 void testVswPush(String button, String ref = '') {
   logTrace('testVswPush', "Executing device/push() for ${b(button)}.")
-  getVswForButton(button).push()
+  Map args = [ref: ref, version: STATE[DID()].version]
+  getVswForButton(button).push(args)
 }
 
 // STATE ALTERING METHODS
@@ -386,7 +393,6 @@ void populateNewPbsg(Map parms) {
   //     * Replace cmdQueueHandler (focused on the new Version)
   //     * Update appropriate PBSG Attributes
   // Input
-  //   parms.newPbsg - Initialized PBSG Map w/ structural fields populated.
   //       parms.ref - Context string provided by caller
   if (parms.newPbsg) {
     Map pbsg = airGap(parms.newPbsg)
@@ -394,14 +400,14 @@ void populateNewPbsg(Map parms) {
       ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
       pbsg.lifo.push(button)
       if (vsw.switch == 'on') {
-        pbsgActivate(pbsg, button, 'invoked by populateNewPbsg()')
+        pbsgActivate(pbsg, button, parms.ref)
       }
     }
     if (!pbsg.active && pbsg.dflt) {
-      pbsgActivate(pbsg, pbsg.dflt, 'invoked by populateNewPbsg()')
+      pbsgActivate(pbsg, pbsg.dflt, parms.ref)
     }
     //-> logTrace('populateNewPbsg', 'Handing off to savePbsgState()')
-    savePbsgState(pbsg: pbsg, ref: 'invoked by populateNewPbsg()')
+    savePbsgState(pbsg: pbsg, ref: parms.ref)
   } else {
     logError('populateNewPbsg', 'Called with null parms.newPbsg')
   }
@@ -417,6 +423,7 @@ void savePbsgState(Map parms) {
   //   parms.pbsg - In-memory PBSG for updating STATE.
   //    parms.ref - Context string provided by caller
   if (parms.pbsg) {
+    String ref = parms.ref ? i(" Ref: ${parms.ref}") : ''
     pbsg = airGap(parms.pbsg)
     // Capture data for sendEvent(...) updates BEFORE updating STATE.
     Integer oldCnt = STATE[DID()].buttonsList.size()
@@ -432,7 +439,7 @@ void savePbsgState(Map parms) {
     //-> logTrace('populateNewPbsg', ['Replacing cmdQueueHandler for new PBSG version.',
     //->   pbsg.version
     //-> ])
-    //-> QUEUE[DID()].put('QUIT')  // Stop current cmdQueueHandler
+    //-> enqueueCommand('QUIT')  // Stop current cmdQueueHandler
     logTrace('activate', "queueing ${bMap(command)}")
     //-> Map args = [ version: pbsg.version, ref: parms.ref ]
     //-> runInMillis(500, 'cmdQueueHandler', [data: args]) // DFLT overwrite: true
@@ -452,7 +459,7 @@ void savePbsgState(Map parms) {
       name: 'jsonPbsg',
       isStateChange: true,
       value: toJson(pbsg),
-      descriptionText: pbsg_StateHtml(pbsg)
+      descriptionText: ref
     )
     //-> logTrace('populateNewPbsg', "activeChanged: ${activeChanged}")
     if (activeChanged) {
@@ -462,7 +469,7 @@ void savePbsgState(Map parms) {
         isStateChange: activeChanged,
         value: pbsg.active,
         unit: '#',
-        descriptionText: desc
+        descriptionText: desc + ref
       )
     }
     //-> logTrace('populateNewPbsg', "cntChanged: ${cntChanged} ${oldCnt}->${newCnt}")
@@ -473,7 +480,7 @@ void savePbsgState(Map parms) {
         isStateChange: cntChanged,
         value: newCnt,
         unit: '#',
-        descriptionText: desc
+        descriptionText: desc + ref
       )
     }
     // Update Related Attributes
@@ -503,7 +510,9 @@ void cmdQueueHandler(Map parms) {
     logInfo('cmdQueueHandler', 'Awaiting next take().')
     Map command = QUEUE[DID()].take()
     Map pbsg = STATE[DID()]
-    logInfo('cmdQueueHandler', "Processing command: ${command}.")
+    logInfo('cmdQueueHandler', ['Processing command:',
+      bMap(command)
+    ])
     if (pbsg.version == command.version) {
 // Note: Version Strings can be compared (w/out parsing them back to Instants).
       switch(command.name) {
