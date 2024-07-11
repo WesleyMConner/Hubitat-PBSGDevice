@@ -57,7 +57,7 @@ metadata {
                                  // Commands: push(number)
 
     // Commands not implied by a Capability
-    command 'config', [
+    command 'configPbsg', [
       [ name: 'jsonPrefs', type: 'String', description: 'Map of prefs serialized as JSON']
     ]
     command 'activate', [
@@ -68,17 +68,17 @@ metadata {
       [ name: 'button', type: 'text', description: 'button to deactivate' ],
       [ name: 'description', type: 'text', description: 'optional text' ]
     ]
-    command 'testVswOn', [
+    command 'simulateVswOn', [
       [ name:'button', type: 'text', description: 'TEST vsw.on()' ],
       [ name: 'description', type: 'text', description: 'optional text' ]
     ]
-    command 'testVswOff', [
+    command 'simulateVswOff', [
       [ name:'button', type: 'text', description: 'TEST vsw.off()' ],
       [ name: 'description', type: 'text', description: 'optional text' ]
     ]
-    command 'testVswPush', [
-      [ name:'button', type: 'text', description: 'TEST vsw.push()' ],
-      [ name: 'description', type: 'text', description: 'optional text' ]
+    command 'simulateVswPush', [
+      [ name:'buttonNumber', type: 'Integer', description: 'TEST vsw.push()' ] //,
+      //[ name: 'description', type: 'text', description: 'optional text' ]
     ]
     // Attributes not implied by a Capability
     attribute 'jsonPbsg', 'string'
@@ -114,29 +114,10 @@ metadata {
       defaultValue: 'TRACE',
       required: true
     )
-    input( name: 'logVswActivity',
-      title: b('Enable/Disable VSW Logging'),
-      type: 'bool',
-      defaultValue: true,
-      required: true
-    )
   }
 }
 
-// State Management Methods
-
-String timestampAsString() { return java.time.Instant.now().toString() }
-
-Map getEmptyPbsg() {
-  return [
-    version: timestampAsString(),
-    buttonsList: [],
-    dflt: null,
-    instType: 'pbsg',
-    active: null,
-    lifo: []
-  ]
-}
+// System Device Management Methods
 
 void installed() {
   // Called when a bare device is first constructed.
@@ -169,7 +150,9 @@ void updated() {
   updatePbsgStructure(parms: [ref: 'Invoked by updated()'])
 }
 
-// UTILITY METHODS
+// Utility Methods
+
+String timestampAsString() { return java.time.Instant.now().toString() }
 
 Integer buttonNameToPushed(String button, ArrayList buttons) {
   // Button name to button 'keypad' position is always computed 'on-the-fly'.
@@ -178,95 +161,67 @@ Integer buttonNameToPushed(String button, ArrayList buttons) {
   }?."${button}"
 }
 
-// STATE ALTERING COMMANDS
+// Externally-Exposed PBSG Commands
 
-void config(String jsonPrefs, String ref = '') {
-  // If a config change alters the structure of the PBSG:
-  //   - The PBSG is rebuilt to the new structure
-  //   - The PBSG version is updated.
-  //   - The cmdQueueHandle is bounced and targets the commands for
-  //     the new version.
-  updatePbsgStructure(config: jsonPrefs, ref: 'Invoked by config()')
+void configPbsg(String jsonPrefs, String ref = '') {
+  // If the configuration change alters the PBSG structure:
+  //   - Rebuild the PBSG to the new structure
+  //   - Update the PBSG version.
+  updatePbsgStructure(config: jsonPrefs, ref: 'Invoked by configpbsg()')
 }
 
-void enqueueCommand(Map command) {
-  QUEUE[DID()].put(command)
+void push(Integer buttonNumber, String ref = '') {
+  // This method supports Capability 'PushableButton'.
+  if (buttonNumber) {
+    Map command = [
+      name: 'Push',
+      arg: buttonNumber,
+      ref: ref,
+      version: STATE[DID()].version
+    ]
+    logTrace('push', "queueing ${bMap(command)}")
+    enqueueCommand(command)
+  } else {
+    logError('push', 'Called with buttonNumber=NULL')
+  }
 }
 
 void activate(String button, String ref = '') {
-  //if (button) {
-  logDebug('activate', ['',
-    "button: ${button}",
-    "ref: ${ref}",
-    "STATE[DID()].version: ${STATE[DID()].version}",
-    "QUEUE[DID()]: ${QUEUE[DID()]}"
-  ])
-  Map command = [
-    name: 'Activate',
-    arg: button,
-    ref: ref,
-    version: STATE[DID()].version
-  ]
-  logTrace('activate', "queueing: ${bMap(command)}")
-  enqueueCommand(command)
-  //} else {
-  //  logError('activate', 'Called with button=NULL')
-  //}
+  if (button) {
+    Map command = [
+      name: 'Activate',
+      arg: button,
+      ref: ref,
+      version: STATE[DID()].version
+    ]
+    logTrace('activate', "queueing: ${bMap(command)}")
+    enqueueCommand(command)
+  } else {
+    logError('activate', 'Called with button=NULL')
+  }
 }
 
 void deactivate(String button, String ref = '') {
-  //if (button) {
-  Map command = [
-    name: 'Deactivate',
-    arg: button,
-    ref: ref,
-    version: STATE[DID()].version
-  ]
-  logTrace('deactivate', "queueing ${bMap(command)}")
-  enqueueCommand(command)
-  //} else {
-  //  logError('deactivate', 'Called with button=NULL')
-  //}
+  if (button) {
+    Map command = [
+      name: 'Deactivate',
+      arg: button,
+      ref: ref,
+      version: STATE[DID()].version
+    ]
+    logTrace('deactivate', "queueing ${bMap(command)}")
+    enqueueCommand(command)
+  } else {
+    logError('deactivate', 'Called with button=NULL')
+  }
 }
 
-void push(String button, String ref = '') {
-  //if (button) {
-  Map command = [
-    name: 'Toggle',
-    arg: button,
-    ref: ref,
-    version: timestampAsString()
-  ]
-  logTrace('toggle', "queueing ${bMap(command)}")
-  enqueueCommand(command)
-  //} else {
-  //  logError('push', 'Called with button=NULL')
-  //}
-}
-
-void testVswOn(String button, String ref = '') {
-  logTrace('testVswOn', "Executing device.on() for ${b(button)}.")
-  Map args = [ref: ref, version: STATE[DID()].version]
-  getVswForButton(button).on(args)
-}
-
-void testVswOff(String button, String ref = '') {
-  logTrace('testVswOff', "Turning device.off() for ${b(button)}.")
-  Map args = [ref: ref, version: STATE[DID()].version]
-  getVswForButton(button).off(args)
-}
-
-void testVswPush(String button, String ref = '') {
-  logTrace('testVswPush', "Executing device/push() for ${b(button)}.")
-  Map args = [ref: ref, version: STATE[DID()].version]
-  getVswForButton(button).push(args)
-}
-
-// STATE ALTERING METHODS
+// Internal Methods
 
 void updatePbsgStructure(Map parms) {
   // Abstract
-  //   * Evaluates the health of config (settings overlayed with parms.conf).
+  //   * Evaluates the health of configuration (i.e., settings overlayed with
+  //     parms.conf).
   //   * If config is healthy and the PBSG STRUCTURE has changed, rebuild PBSG.
   // Input
   //   parms.config - Map of <k, v> pairs that overwrite settings <k, v> pairs.
@@ -293,10 +248,6 @@ void updatePbsgStructure(Map parms) {
       setLogLevel('TRACE')
     } else {
       setLogLevel(config.logLevel)
-    }
-    if (config.logVswActivity == null) {
-      issues << "The setting ${b('logVswActivity')} is null, forcing TRUE"
-      device.updateSetting('logVswActivity', true)
     }
     // Reviewing PBSG Structural fields.
     Boolean healthyButtons = true
@@ -367,16 +318,16 @@ void updatePbsgStructure(Map parms) {
       logWarn('updatePbsgStructure', [ i(parms.ref),
         "The PBSG structure has changed, new version: ${b(newPbsg.version)}."
       ])
-      Map pbsg = populateNewPbsg(newPbsg: newPbsg, ref: parms.ref)
+      Map pbsg = rebuildPbsg(newPbsg: newPbsg, ref: parms.ref)
     } else {
-      logWarn('newPbsg', [ i(parms.ref),
+      logWarn('updatePbsgStructure', [ i(parms.ref),
         'The PBSG is healthy and DOES NOT REQUIRE a rebuild.'
       ])
     }
   }
 }
 
-void populateNewPbsg(Map parms) {
+void rebuildPbsg(Map parms) {
   // Abstract
   //   Rebuild the PBSG per the structure in parms.newPbsg.
   //     * Updates STATE
@@ -386,22 +337,26 @@ void populateNewPbsg(Map parms) {
   if (parms.newPbsg) {
     Map pbsg = airGap(parms.newPbsg)
     pbsg.buttonsList.each { button ->
-      ChildDevW vsw = getOrCreateVswWithToggle(device.getLabel(), button)
+      ChildDevW vsw = getOrCreateVswWithToggle(
+        device.getLabel(),
+        button,
+        buttonNameToPushed(button, pbsg.buttonsList)
+      )
       pbsg.lifo.push(button)
       if (vsw.switch == 'on') {
-        pbsgActivate(pbsg, button, parms.ref)
+        pbsg_Activate(pbsg, button, parms.ref)
       }
     }
     if (!pbsg.active && pbsg.dflt) {
-      pbsgActivate(pbsg, pbsg.dflt, parms.ref)
+      pbsg_Activate(pbsg, pbsg.dflt, parms.ref)
     }
-    savePbsgState(pbsg: pbsg, ref: parms.ref)
+    pbsg_SaveState(pbsg: pbsg, ref: parms.ref)
   } else {
-    logError('populateNewPbsg', 'Called with null parms.newPbsg')
+    logError('rebuildPbsg', 'Called with null parms.newPbsg')
   }
 }
 
-void savePbsgState(Map parms) {
+void pbsg_SaveState(Map parms) {
   // Abstract
   //   Update STATE for the PBSG and publish appropriate Attributes.
   //     * Updates STATE
@@ -419,20 +374,16 @@ void savePbsgState(Map parms) {
     Integer newPos = buttonNameToPushed(pbsg.active, pbsg.buttonsList)
     String from = "${i(STATE[DID()].active)} (${i(oldPos)})"
     String to = "${b(pbsg.active)} (${b(newPos)})"
-    String desc = "[Change: ${from} → ${to}]"
+    String desc = "[${from} → ${to}]"
     Boolean activeChanged = (STATE[DID()].active != pbsg.active)
     Boolean cntChanged = (oldCnt != newCnt)
     STATE[DID()] = pbsg
-    logTrace('activate', "queueing ${bMap(command)}")
+    logTrace('pbsg_SaveState', "pbsg ${bMap(pbsg)}")
     // Reconcile VSWs
     pbsg.buttonsList.each{ button ->
-      if (pbsg.active == button) {
-        turnOnVsw(button)
-      } else {
-        turnOffVsw(button)
-      }
+      updateVswState(button, (pbsg.active == button) ? 'on' : 'off')
     }
-    logTrace('populateNewPbsg', ['Updating jsonPbsg',
+    logTrace('pbsg_SaveState', ['Updating jsonPbsg',
       bMap(pbsg),
       pbsg_StateHtml(pbsg)
     ])
@@ -442,9 +393,8 @@ void savePbsgState(Map parms) {
       value: toJson(pbsg),
       descriptionText: ref
     )
-    //-> logTrace('populateNewPbsg', "activeChanged: ${activeChanged}")
     if (activeChanged) {
-      logTrace('populateNewPbsg', "Updating active: ${b(pbsg.active)}, (${desc})")
+      logTrace('pbsg_SaveState', "Updating active: ${b(pbsg.active)}, (${desc})")
       device.sendEvent(
         name: 'active',
         isStateChange: activeChanged,
@@ -453,9 +403,8 @@ void savePbsgState(Map parms) {
         descriptionText: desc + ref
       )
     }
-    //-> logTrace('populateNewPbsg', "cntChanged: ${cntChanged} ${oldCnt}->${newCnt}")
     if (cntChanged) {
-      logTrace('populateNewPbsg', "Updating numberOfButtons: ${b(newCnt)}, (${desc})")
+      logTrace('pbsg_SaveState', "Updating numberOfButtons: ${b(newCnt)}, (${desc})")
       device.sendEvent(
         name: 'numberOfButtons',
         isStateChange: cntChanged,
@@ -467,12 +416,23 @@ void savePbsgState(Map parms) {
     // Update Related Attributes
     pruneOrphanedDevices(pbsg)
   } else {
-    logError('populateNewPbsg', 'Missing parms.pbsg')
+    logError('pbsg_SaveState', 'Missing parms.pbsg')
   }
 }
 
-Boolean logVswActivity() {
-  return settings.logVswActivity
+Map getEmptyPbsg() {
+  return [
+    version: timestampAsString(),
+    buttonsList: [],
+    dflt: null,
+    instType: 'pbsg',
+    active: null,
+    lifo: []
+  ]
+}
+
+void enqueueCommand(Map command) {
+  QUEUE[DID()].put(command)
 }
 
 void commandProcessor(Map parms) {
@@ -481,8 +441,8 @@ void commandProcessor(Map parms) {
   //   - If the command is older, it is considered 'stale' and dropped.
   //   - If the command is newer, an error is thrown.
   logWarn('commandProcessor', 'QUEUE HANDLER LOOP STARTED')
-  logInfo('commandProcessor', "parms: ${parms}")
-  pauseExecution(1000)
+  //-> logInfo('commandProcessor', "parms: ${parms}")
+  //-> pauseExecution(1000)
   while (1) {
     logInfo('commandProcessor', 'Awaiting next take().')
     Map command = QUEUE[DID()].take()
@@ -495,17 +455,18 @@ void commandProcessor(Map parms) {
         case 'Activate':
           String button = command.arg
           logTrace('commandProcessor', "case Activate for ${b(button)}.")
-          pbsgActivate(pbsg, button, command.ref)
-          savePbsgState(pbsg: pbsg, ref: command.ref)
+          pbsg_Activate(pbsg, button, command.ref)
+          pbsg_SaveState(pbsg: pbsg, ref: command.ref)
           break
         case 'Deactivate':
           String button = command.arg
           logTrace('commandProcessor', "case Deactivate for ${b(button)}.")
-          pbsgDeactivate(pbsg, button, command.ref)
-          savePbsgState(pbsg: pbsg, ref: command.ref)
+          pbsg_Deactivate(pbsg, button, command.ref)
+          pbsg_SaveState(pbsg: pbsg, ref: command.ref)
           break
-        case 'Toggle':
-          String button = command.arg
+        case 'Push':
+          Integer buttonNumber = command.arg
+          String button = pbsg.buttonsList[buttonNumber]
           logTrace('commandProcessor', "case Toggle for ${b(button)}.")
           if (pbsg.active == button) {
             if (button == pbsg.dflt) {
@@ -513,22 +474,22 @@ void commandProcessor(Map parms) {
                 "The button is 'on' AND is also the default button"
               ])
             } else {
-              logInfo('commandProcessor', "Toggling ${b(button) 'off'}")
+              logInfo('commandProcessor', "Toggling ${b(button)} 'off'")
               pbsg.lifo.push(pbsg.active)
               pbsg.active = null
               if (pbsg.dflt) {
                 pbsg.lifo.removeAll([pbsg.dflt])
                 pbsg.active = pbsg.dflt
               }
-              savePbsgState(pbsg: pbsg, ref: command.ref)
+              pbsg_SaveState(pbsg: pbsg, ref: command.ref)
             }
           } else {
             if (pbsg.lifo.contains(button)) {
-              logInfo('commandProcessor', "Toggling ${b(button) 'on'}")
+              logInfo('commandProcessor', "Toggling ${b(button)} 'on'")
               if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
               pbsg.lifo.removeAll([button])
               pbsg.active = button
-              savePbsgState(pbsg: pbsg, ref: command.ref)
+              pbsg_SaveState(pbsg: pbsg, ref: command.ref)
             } else {
               logWarn('commandProcessor', ["Ignoring 'Toggle ${b(button)}'",
                 "The button is not found. (PBSG: ${bMap(pbsg)})"
@@ -539,7 +500,7 @@ void commandProcessor(Map parms) {
         default:
           logError('commandProcessor', "Unknown Command: ${command}")
       }
-    } else if (command.version < parms.version) {
+    } else if (command.version < pbsg.version) {
       logWarn('commandProcessor', ['Dropping stale command.',
         "command.version: ${b(command.version)}",
         "   pbsg.version: ${b(pbsg.version)}"
@@ -550,106 +511,6 @@ void commandProcessor(Map parms) {
         "   pbsg.version: ${b(pbsg.version)}"
       ])
     }
-  }
-}
-
-Map pbsgActivate(Map pbsg, String button, String ref = null) {
-  if (pbsg?.active == button) {
-    logInfo(
-      'pbsgActivate',
-      "Ignoring 'Activate ${b(button)}'. The button is already active."
-    )
-  } else if (pbsg.lifo.contains(button)) {
-    logInfo('pbsgActivate', "Activating ${b(button)}")
-    if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
-    pbsg.lifo.removeAll([button])
-    pbsg.active = button
-    savePbsgState(pbsg: pbsg, ref: ref)
-  } else {
-    logWarn('pbsgActivate', ["Ignoring 'Activate ${b(button)}'",
-      "The button is not found. (PBSG: ${bMap(pbsg)})"
-    ])
-  }
-  return pbsg
-}
-
-Map pbsgDeactivate(Map pbsg, String button, String ref) {
-  if (pbsg.active != button) {
-    logWarn(
-      'pbsgDeactivate',
-      "Ignoring 'Deactivate ${b(button)}'. The button is not active."
-    )
-  } else if (pbsg.active == pbsg.dflt) {
-    logWarn(
-      'pbsgDeactivate',
-      "Ignoring 'Deactivate ${b(button)}. The button is the default button."
-    )
-  } else if (pbsg.active == button) {
-    logInfo('pbsgDeactivate', "Deactivating ${b(button)}")
-    pbsg.lifo.push(pbsg.active)
-    pbsg.active = null
-    if (pbsg.dflt) {
-      pbsg.lifo.removeAll([pbsg.dflt])
-      pbsg.active = pbsg.dflt
-    }
-    savePbsgState(pbsg: pbsg, ref: ref)
-  }
-}
-
-void turnOnVsw(String button) {
-  ChildDevW d = getVswForButton(button)
-  if (d) {
-    // Parse expects a list (ArrayList) of commands (Maps)
-    ArrayList commands = [] << [
-      name: 'switch',
-      value: 'on',
-      descriptionText: "Turned on ${d.getDeviceNetworkId()}",
-      isStateChange: (d.switch != 'on')
-    ]
-    d.parse(commands)
-  }
-}
-
-void turnOffVsw(String button) {
-  if (button) {
-    ChildDevW d = getVswForButton(button)
-    if (d) {
-      // Parse expects a list (ArrayList) of commands (Maps)
-      ArrayList commands = [] << [
-        name: 'switch',
-        value: 'off',
-        descriptionText: "Turned off ${d.getDeviceNetworkId()}",
-        isStateChange: (d.switch != 'off')
-      ]
-      d.parse(commands)
-    }
-    if (settings?.logVswActvity) {
-      logInfo('turnOffVsw', "Turned off ${d.getDeviceNetworkId()}")
-    }
-  } else {
-    logError('turnOffVsw', 'Received null parameter "button"')
-  }
-}
-
-String currentSettingsHtml() {
-  return [
-    b('SETTINGS:'),
-    settings.collect { k, v -> "${i(k)}: ${b(v)}" }.join(', ')
-  ].join('<br/>')
-}
-
-void pruneOrphanedDevices(Map pbsg) {
-  ArrayList buttonsList = STATE[DID()].buttonsList
-  ArrayList expectedChildDnis = buttonsList.collect { button ->
-    "${device.getLabel()}_${button}"
-  }
-  ArrayList currentChildDnis = getChildDevices().collect { d ->
-    d.getDeviceNetworkId()
-  }
-  ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
-  orphanedDevices.each { dni ->
-    logWarn('pruneOrphanedDevices', "Removing orphaned device ${b(dni)}.")
-    deleteChildDevice(dni)
   }
 }
 
@@ -720,21 +581,69 @@ String pbsg_StateHtml(Map pbsg) {
   return table ? table.join() : null
 }
 
-ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
+// Adjust In-Memory PBSG (without altering state)
+
+void pbsg_Activate(Map pbsg, String button, String ref = null) {
+  if (pbsg?.active == button) {
+    logInfo(
+      'pbsg_Activate',
+      "Ignoring 'Activate ${b(button)}'. The button is already active."
+    )
+  } else if (pbsg.lifo.contains(button)) {
+    logInfo('pbsg_Activate', "Activating ${b(button)}")
+    if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
+    pbsg.lifo.removeAll([button])
+    pbsg.active = button
+  } else {
+    logWarn('pbsg_Activate', ["Ignoring 'Activate ${b(button)}'",
+      "The button is not found. (PBSG: ${bMap(pbsg)})"
+    ])
+  }
+}
+
+void pbsg_Deactivate(Map pbsg, String button, String ref) {
+  if (pbsg.active != button) {
+    logWarn(
+      'pbsg_Deactivate',
+      "Ignoring 'Deactivate ${b(button)}'. The button is not active."
+    )
+  } else if (pbsg.active == pbsg.dflt) {
+    logWarn(
+      'pbsg_Deactivate',
+      "Ignoring 'Deactivate ${b(button)}. The button is the default button."
+    )
+  } else if (pbsg.active == button) {
+    logInfo('pbsg_Deactivate', "Deactivating ${b(button)}")
+    pbsg.lifo.push(pbsg.active)
+    pbsg.active = null
+    if (pbsg.dflt) {
+      pbsg.lifo.removeAll([pbsg.dflt])
+      pbsg.active = pbsg.dflt
+    }
+  }
+}
+
+// Manage VSWs and Implement VSW Methods
+
+ChildDevW getOrCreateVswWithToggle(
+  String pbsgName,
+  String buttonName,
+  Integer buttonPosition
+) {
   // Device Network Identifier (DNI) does not include white space.
   // Device Names / Labels limit special characters to '_'.
-  String dni = "${pbsgName}_${button}"
-  String name = dni.replaceAll('_', ' ')
+  String dni = "${pbsgName}_${buttonName}"
+  String deviveName = dni.replaceAll('_', ' ')
   ChildDevW d = getChildDevice(dni)
   if (!d) {
     d = addChildDevice(
-      'WesMC',               // namespace
-      'VswWithToggle',       // typeName
-      dni,                   // Device Network Identifier (<pbsgName>_<button>)
+      'WesMC',               // Device namespace
+      'VswWithToggle',       // Device type
+      dni,
       [
         isComponent: true,   // Lifecycle is tied to parent
-        name: name,          // "PBSG <pbsgName>"
-        label: name          // "PBSG <pbsgName>"
+        name: deviveName,
+        label: deviveName
       ]
     )
     logWarn(
@@ -742,7 +651,48 @@ ChildDevW getOrCreateVswWithToggle(String pbsgName, String button) {
       "Created new VswWithToggle instance: ${devHued(d)}"
     )
   }
+  d.setButtonNameAndPosition(buttonName, buttonPosition)
   return d
+}
+
+void pruneOrphanedDevices(Map pbsg) {
+  ArrayList buttonsList = STATE[DID()].buttonsList
+  ArrayList expectedChildDnis = buttonsList.collect { button ->
+    "${device.getLabel()}_${button}"
+  }
+  ArrayList currentChildDnis = getChildDevices().collect { d ->
+    d.getDeviceNetworkId()
+  }
+  ArrayList orphanedDevices = currentChildDnis?.minus(expectedChildDnis)
+  orphanedDevices.each { dni ->
+    logWarn('pruneOrphanedDevices', "Removing orphaned device ${b(dni)}.")
+    deleteChildDevice(dni)
+  }
+}
+
+void updateVswState(String button, String value) {
+  if (button) {
+    if (value == 'on' || value == 'off') {
+      ChildDevW d = getVswForButton(button)
+      if (d) {
+        // Create the ArrayList of commands (Maps) for
+        ArrayList commands = [] << [
+          name: 'switch',
+          value: value,
+          descriptionText: "Turned on ${d.getDeviceNetworkId()}",
+          isStateChange: (d.switch != value)
+        ]
+        d.parse(commands)
+        logInfo(d.getDeviceNetworkId(), 'Turned on')
+      } else {
+        logError('updateVswState', "Failed to get VSW for ${button}")
+      }
+    } else {
+      logError('updateVswState', "Expected value 'on' or 'off', got '${value}'.")
+    }
+  } else {
+    logError('updateVswState', 'Received null parameter "button"')
+  }
 }
 
 // VSW SUPPORT
@@ -758,19 +708,6 @@ ChildDevW getVswForButton(String button) {
     logError('getVswForButton', "No Device (${devHued(d)}) for button (${b(button)}).")
   }
   return d
-}
-
-// SUPPORT FOR CAPABILITY 'PushableButton'
-
-void push(Integer buttonNumber) {
-  ArrayList buttonsList = atomicState?.buttons
-  if (buttonsList) {
-    String button = buttonsList[buttonNumber - 1]
-    logInfo('push', "Received ${b(buttonNumber)} (${button})")
-    activateButton(button)
-  } else {
-    logError('push', 'null STATE[DID()].buttonsList')
-  }
 }
 
 // UNUSED / UNSUPPORTED

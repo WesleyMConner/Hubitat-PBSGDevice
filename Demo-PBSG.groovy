@@ -228,18 +228,18 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
       "wed_Activate",
       "wed_Deactivate",
       "fri_Activate",
-      "fri_VswOff",
+      "fri_Deactivate",
       "thu_Deactivate",
-      "fri_VswOn",
-      "fri_VswPush",
-      "fri_VswPush",
-      "tue_VswOn",
-      "wed_VswOff",
+      "fri_Activate",
+      "5_VswPush",
+      "5_VswPush",
+      "tue_Activate",
+      "wed_Deactivate",
       "wed_Deactivate",
       "fri_Activate",
-      "fri_VswPush",
-      "mon_VswPush",
-      "tue_VswOn",
+      "5_VswPush",
+      "1_VswPush",
+      "tue_Activate",
       "tue_Deactivate"
     ]),  // HARDWIRE TEMPORARILY
     //defaultValue: testSequenceJson,
@@ -277,13 +277,14 @@ ArrayList getTestSequence(String pbsgName) {
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
   ArrayList buttons = getButtonNames("${pbsgName}_")
+  Map buttonToNumber = buttons.withIndex().collectEntries{ b, i ->
+    [(b), i+1]
+  }
   ArrayList testActions = new ArrayList()
   buttons.each{ b ->
     testActions << "${b}_Activate"
     testActions << "${b}_Deactivate"
-    testActions << "${b}_VswOn"
-    testActions << "${b}_VswOff"
-    testActions << "${b}_VswPush"
+    testActions << "${buttonToNumber[b]}_VswPush"
   }
   //-> testActions.add('Activate_last_active')
   //testActions << 'No more actions'
@@ -481,11 +482,10 @@ void exercisePbsg() {
         buttons: getButtonNames(prefix).join(' '),
         dflt: defaultButton(prefix),
         instType: 'pbsg',
-        logLevel: 'TRACE',
-        logVswActivity: true
+        logLevel: 'TRACE'
       ]
       String jsonPrefs = toJson(prefs)
-      pbsg.config(jsonPrefs, 'Config PBSG using JSON')
+      pbsg.configPbsg(jsonPrefs, 'Config PBSG using JSON')
       // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
       ArrayList testSeqList = getTestSequence(pbsgName)
       logTrace(
@@ -511,18 +511,27 @@ void exercisePbsg() {
               pbsg.deactivate(target, ref)
               break
             case 'VswOn':
-              pbsg.testVswOn(target, ref)
+              pbsg.simulateVswOn(target, ref)
               break
             case 'VswOff':
-              pbsg.testVswOff(target, ref)
+              pbsg.simulateVswOff(target, ref)
               break
             case 'VswPush':
-              pbsg.testVswPush(target, ref)
+              Integer buttonNumber = safeParseInt(target)
+              ArrayList buttonsList = getButtonNames(prefix)
+              String button = buttonsList[buttonNumber - 1]
+  //-> logDebug('exercisePbsg', ['VswPush',
+  //->   "target: ${target} ${getObjectClassName(target)}",
+  //->   "buttonNumber: ${buttonNumber}",
+  //->   "buttonsList: ${buttonsList}",
+  //->   "button: ${button}"
+  //-> ])
+              pbsg.push(buttonNumber, ref)
               break
             default:
               logError(
                 'exercisePbsg',
-                "Unknown action: ${action}, target: ${target}"
+                "Unknown action: ${action} on button: ${button}"
               )
           }
         } else {

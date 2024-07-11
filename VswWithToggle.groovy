@@ -36,7 +36,7 @@ metadata {
     importUrl: 'https://github.com/WesleyMConner/Hubitat-PBSGLibrary',
     singleThreaded: 'false'
   ) {
-    capability "Switch"          // Attribtes:
+    capability "Switch"          // Attributes:
                                  //   - switch: ['on'|'off']
                                  // Commands: on(), off()
     capability "Momentary"       // Commands: push()
@@ -44,48 +44,35 @@ metadata {
   preferences { /* THIS DEVICE IS FULLY MANAGED BY THE PARENT DEVICE */ }
 }
 
-// COMMANDS FOR ADVERTISED CAPABILITIES
-
-void on(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('on', "Received on() w/ parms: ${parms}")
-  }
-  Map command = [
-    name: 'Activate',
-    arg: button,
-    ref: i(parms?.ref) ?: '',
-    version: parms?.version ?: ''
-  ]
-  logTrace('on', "Queing ${bMap(command)}")
-  parent.enqueueCommand(command)
+void setButtonNameAndPosition(String buttonName, Integer buttonPosition) {
+  // The PBSG parent device calls this method just after device creation.
+  // Capturing the device's button name and position simplifies subsequent
+  // interacton with the parent device.
+  state.buttonName = buttonName
+  state.buttonPosition = buttonPosition
 }
 
-void off(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('off', "Received off() w/ parms: ${parms}")
-  }
-  Map command = [
-    name: 'Deactivate',
-    arg: button,
-    ref: i(parms?.ref) ?: '',
-    version: parms?.version ?: ''
-  ]
-  logTrace('off', "Queing ${bMap(command)}")
-  parent.enqueueCommand(command)
+// COMMANDS FOR ADVERTISED CAPABILITIES
+
+void on() {
+  parent.activate(
+    state.buttonName,
+    "${this.device.getDeviceNetworkId()} on()"
+  )
+}
+
+void off() {
+  parent.deactivate(
+    state.buttonName,
+    "${this.device.getDeviceNetworkId()} off()"
+  )
 }
 
 void push(Map parms = null) {
-  if (parent.logVswActivity()) {
-    logTrace('push', "Received push() w/ parms: ${parms}")
-  }
-  Map command = [
-    name: 'Toggle',
-    arg: button,
-    ref: i(parms?.ref) ?: '',
-    version: parms?.version ?: ''
-  ]
-  logTrace('push', "Queing ${bMap(command)}")
-  parent.enqueueCommand(command)
+  parent.push(
+    state.buttonPosition,
+    "${this.device.getDeviceNetworkId()} push()"
+  )
 }
 
 // EXPECT PARENT TO MANIPULATE THIS DEVICE
@@ -100,12 +87,8 @@ void parse(ArrayList actions) {
   //      |   isStateChange | true or false           |
   //      |            unit | NOT REQUIRED            |
   //      +-----------------+-------------------------+
-  // PROCESS THE LIST OF ACTIONS
   ArrayList allowedActions = ['switch']
   actions.each{ action ->
-    if (parent.logVswActivity()) {
-      logTrace('parse', ['Processing Action', bMap(action)])
-    }
     if (action?.name in allowedActions) { sendEvent(action) }
   }
 }

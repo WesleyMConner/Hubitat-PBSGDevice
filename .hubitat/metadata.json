@@ -10,7 +10,7 @@
       "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/Demo-PBSG.groovy",
       "codeType": "app",
       "id": 440,
-      "version": 573
+      "version": 586
     },
     {
       "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/Demo-PBSG-device.groovy",
@@ -22,13 +22,13 @@
       "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/Pbsg.groovy",
       "codeType": "driver",
       "id": 972,
-      "version": 664
+      "version": 679
     },
     {
       "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/VswWithToggle.groovy",
       "codeType": "driver",
       "id": 970,
-      "version": 71
+      "version": 74
     },
     {
       "filepath": "/Users/wes/hubitat-workspace/Hubitat-PBSGLibrary/testBed1.groovy",
