@@ -110,7 +110,7 @@ metadata {
       title: b('PBSG Log Threshold ≥'),
       type: 'enum',
       multiple: false,
-      options: ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],  // Static Options
+      options: [ 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'],  // Static Options
       defaultValue: 'TRACE',
       required: true
     )
@@ -125,7 +125,7 @@ void installed() {
   // Both STATE and QUEUE must be populated for a new device.
   STATE[DID()] = getEmptyPbsg()
   QUEUE[DID()] = new SynchronousQueue<Map>(true) // TRUE → FIFO
-  logWarn('installed', ['',
+  logWarn('installed', [ '',
     'Launching Command Queue Handler.',
     "Watch for ${b('QUEUE HANDLER LOOP STARTED')}! in the logs.",
     "If the QUEUE HANDLER does not start:",
@@ -183,7 +183,7 @@ Boolean isPbsgChanged(String label, Map p, String ref = '') {
   // Returns true if PBSG and latest STATE differ.
   // Logs any differences.
   Boolean differ = false
-  ArrayList table = ['<table border="1">']
+  ArrayList table = [ '<table border="1">']
   // Build a table of key with differing values.
   table << tr(b('CHANGED KEYS'), b('PBSG'), b('STATE'))     // , b('CHANGED'))
   Map curr = airGapPbsg(STATE[DID()])
@@ -196,8 +196,8 @@ Boolean isPbsgChanged(String label, Map p, String ref = '') {
     s}
   }
   table << '</table>'
-  differ ? logTrace(label, [ b(ref), table.join() ])
-         : logTrace(label, [ b(ref), b('PBSG is unchanged') ])
+  differ ? logInfo(label, [ b(ref), table.join() ])
+         : logInfo(label, [ b(ref), b('PBSG is unchanged') ])
   return differ
 }
 
@@ -302,7 +302,7 @@ void updatePbsgStructure(Map parms) {
       issues << "Missing config ${b('logLevel')}, defaulting to TRACE."
       device.updateSetting('logLevel', 'TRACE')
       setLogLevel('TRACE')
-    } else if (!['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'].contains(config.logLevel)) {
+    } else if (![ 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'].contains(config.logLevel)) {
       issues << [
         "Unrecognized config ${b('logLevel')} '${config.logLevel}', ",
         'defaulting to TRACE.'
@@ -454,7 +454,7 @@ void pbsg_SaveState(Map parms) {
       }
       // Pause briefly to allow for devices to reflect state changes.
       pauseExecution(100)
-      logTrace('pbsg_SaveState', ['Updating jsonPbsg',
+      logTrace('pbsg_SaveState', [ "Updating jsonPbsg, ref: ${ref}",
         pbsg_StateHtml(pbsg),
         bMap(pbsg)
       ])
@@ -531,7 +531,7 @@ void commandProcessor() {  // Map parms
     logTrace('commandProcessor', 'Awaiting next take().')
     Map command = QUEUE[DID()].take()
     Map pbsg = airGapPbsg(STATE[DID()])
-    logTrace('commandProcessor', ['Processing command:', bMap(command)])
+    logTrace('commandProcessor', [ 'Processing command:', bMap(command)])
     if (pbsg.version == command.version) {
       switch(command.name) {
         case 'Activate':
@@ -554,7 +554,7 @@ void commandProcessor() {  // Map parms
           logTrace('commandProcessor', "case Toggle for ${b(button)}.")
           if (pbsg.active == button) {
             if (button == pbsg.dflt) {
-              logInfo('commandProcessor', ["Ignoring 'Toggle ${b(button)}'",
+              logInfo('commandProcessor', [ "Ignoring 'Toggle ${b(button)}'",
                 "The button is 'on' AND is also the default button"
               ])
             } else {
@@ -577,7 +577,7 @@ void commandProcessor() {  // Map parms
 //-> isPbsgChanged('case Push #579', pbsg, command.ref)
               pbsg_SaveState(pbsg: pbsg, ref: command.ref)
             } else {
-              logInfo('commandProcessor', ["Ignoring 'Toggle ${b(button)}'",
+              logInfo('commandProcessor', [ "Ignoring 'Toggle ${b(button)}'",
                 "The button is not found. (PBSG: ${bMap(pbsg)})"
               ])
             }
@@ -587,12 +587,12 @@ void commandProcessor() {  // Map parms
           logError('commandProcessor', "Unknown Command: ${command}")
       }
     } else if (command.version < pbsg.version) {
-      logWarn('commandProcessor', ['Dropping stale command.',
+      logWarn('commandProcessor', [ 'Dropping stale command.',
         "command.version: ${b(command.version)}",
         "   pbsg.version: ${b(pbsg.version)}"
       ])
     } else {
-      logError('commandProcessor', ['PBSG is stale?!',
+      logError('commandProcessor', [ 'PBSG is stale?!',
         "command.version: ${b(command.version)}",
         "   pbsg.version: ${b(pbsg.version)}"
       ])
@@ -632,7 +632,7 @@ String pbsg_StateText(Map pbsg) {
   //   (not prepended). See "reverse()" below, which compensates.
   String result
   if (pbsg) {
-    ArrayList list = ["${devHued(device)}: "]
+    ArrayList list = [ "${devHued(device)}: "]
     list << (pbsg.active ? buttonState(pbsg.active) : 'null')
     list << ' ← '
     pbsg.lifo?.reverse().each { button ->
