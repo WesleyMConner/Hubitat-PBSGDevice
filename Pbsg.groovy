@@ -62,23 +62,11 @@ metadata {
     ]
     command 'activate', [
       [ name: 'button', type: 'text', description: 'button to activate' ],
-      [ name: 'description', type: 'text', description: 'optional text' ]
+      [ name: 'ref', type: 'text', description: 'optional text for tracing' ]
     ]
     command 'deactivate', [
       [ name: 'button', type: 'text', description: 'button to deactivate' ],
-      [ name: 'description', type: 'text', description: 'optional text' ]
-    ]
-    command 'simulateVswOn', [
-      [ name:'button', type: 'text', description: 'TEST vsw.on()' ],
-      [ name: 'description', type: 'text', description: 'optional text' ]
-    ]
-    command 'simulateVswOff', [
-      [ name:'button', type: 'text', description: 'TEST vsw.off()' ],
-      [ name: 'description', type: 'text', description: 'optional text' ]
-    ]
-    command 'simulateVswPush', [
-      [ name:'buttonNumber', type: 'Integer', description: 'TEST vsw.push()' ] //,
-      //[ name: 'description', type: 'text', description: 'optional text' ]
+      [ name: 'ref', type: 'text', description: 'optional text for tracing' ]
     ]
     // Attributes not implied by a Capability
     attribute 'jsonPbsg', 'string'
@@ -160,32 +148,17 @@ void updated() {
   updatePbsgStructure(parms: [ref: 'Invoked by updated()'])
 }
 
-/*
-String tr(String label, String pks, String vs, String chg = null) {
-  String retVal
-  if (chg) {
-    retVal = "<tr><td>${label}</td><td>${pks}</td><td>${vs}</td><td>${chg}</td></tr>"
-  } else {
-    pks = pks ?: 'null'
-    vs = vs ?: 'null'
-    chg = (pks != vs) ? b('✔') : ''
-    retVal = "<tr><td>${label}</td><td>${pks}</td><td>${vs}</td><td>${chg}</td></tr>"
-  }
-  return retVal
-}
-*/
-
 String tr(String label, String pks, String vs) {
   return "<tr><td>${label}</td><td>${pks}</td><td>${vs}</td></tr>"
 }
 
 Boolean isPbsgChanged(String label, Map p, String ref = '') {
-  // Returns true if PBSG and latest STATE differ.
+  // Returns true if PBSG differs with the current STATE.
   // Logs any differences.
   Boolean differ = false
   ArrayList table = [ '<table border="1">']
   // Build a table of key with differing values.
-  table << tr(b('CHANGED KEYS'), b('PBSG'), b('STATE'))     // , b('CHANGED'))
+  table << tr(b('CHANGED KEYS'), b('PBSG'), b('STATE'))
   Map curr = airGapPbsg(STATE[DID()])
   curr.each { k, v ->
     String vs = "${v}"
@@ -237,7 +210,7 @@ void configPbsg(String jsonPrefs, String ref = '') {
 }
 
 void push(Integer buttonNumber, String ref = '') {
-  // This method supports Capability 'PushableButton'.
+  // Per Capability 'PushableButton'.
   if (buttonNumber) {
     Map command = [
       name: 'Push',
@@ -282,16 +255,15 @@ void deactivate(String button, String ref = '') {
 // Internal Methods
 
 void updatePbsgStructure(Map parms) {
-  // Abstract
-  //   * Evaluates the health of configuration (i.e., settings overlayed with
-  //     parms.conf).
-  //   * If config is healthy and the PBSG STRUCTURE has changed, rebuild PBSG.
-  // Input
-  //   parms.config - Map of <k, v> pairs that overwrite settings <k, v> pairs.
-  //      parms.ref - Context string provided by caller
-  // Output
-  //   null - Config is unhealthy or unchanged relative to CSM, see logs.
-  //    Map - The new PBSG (as saved to STATE).
+  // Evaluates the health of available configuration data (i.e., settings
+  // overlayed with parms.conf). If the configiuration is healthy and the
+  // PBSG STRUCTURE has changed, the PBSG instance is rebuilt.
+  //   Input
+  //     parms.config - Map of <k, v> pairs that overwrite settings <k, v> pairs.
+  //        parms.ref - Context string provided by caller.
+  //   Output
+  //     null - Config is unhealthy or unchanged relative to CSM, see logs.
+  //      Map - The new PBSG (as saved to STATE).
   Map config = settings              // Insert Preference <k, v> pairs.
   config << parseJson(parms.config)  // Overlay provided <k, v> pairs.
   ArrayList issues = []
@@ -391,12 +363,13 @@ void updatePbsgStructure(Map parms) {
 }
 
 void rebuildPbsg(Map parms) {
-  // Abstract
-  //   Rebuild the PBSG per the structure in parms.newPbsg.
-  //     * Updates STATE
-  //     * Update appropriate PBSG Attributes
-  // Input
-  //       parms.ref - Context string provided by caller
+  // Rebuild the PBSG per the structure in parms.newPbsg.
+  //   * Updates STATE
+  //   * Update appropriate PBSG Attributes
+  //
+  //   Input
+  //     parms.newPbsg - Constains the structural fields of a new PBSG.
+  //         parms.ref - Context string provided by caller.
   if (parms.newPbsg) {
     Map pbsg = airGapPbsg(parms.newPbsg)
     pbsg.buttonsList.each { button ->
@@ -413,7 +386,6 @@ void rebuildPbsg(Map parms) {
     if (!pbsg.active && pbsg.dflt) {
       pbsg_Activate(pbsg, pbsg.dflt, parms.ref)
     }
-//-> isPbsgChanged('rebuildPbsg #431', pbsg, parms.ref)
     pbsg_SaveState(pbsg: pbsg, ref: parms.ref)
   } else {
     logError('rebuildPbsg', 'Called with null parms.newPbsg')
@@ -421,17 +393,17 @@ void rebuildPbsg(Map parms) {
 }
 
 void pbsg_SaveState(Map parms) {
-  // Abstract
-  //   Update STATE for the PBSG and publish appropriate Attributes.
-  //     * Updates STATE
-  //     * Update appropriate PBSG Attributes
-  //   Per community.hubitat.com/t/avoid-sending-events-for-unchanged-attributes:
-  //     - NOT sending events unless a change has been made/
-  //     - If there is no change in the 'jsonPbsg', then (by its definition) there
-  //       are no changes for 'numberOfButtons', 'active' or 'pushed'.
-  // Input
-  //   parms.pbsg - In-memory PBSG for updating STATE.
-  //    parms.ref - Context string provided by caller
+  // Update STATE for the PBSG and publish appropriate Attributes.
+  //   * Updates STATE
+  //   * Update appropriate PBSG Attributes
+  // Per community.hubitat.com/t/avoid-sending-events-for-unchanged-attributes:
+  //   - NOT sending events unless a change has been made/
+  //   - If there is no change in the 'jsonPbsg', then (by its definition) there
+  //     are no changes for 'numberOfButtons', 'active' or 'pushed'.
+  //
+  //   Input
+  //     parms.pbsg - In-memory PBSG for updating STATE.
+  //      parms.ref - Context string provided by caller
   if (parms.pbsg) {
     if (isPbsgChanged('pbsg_SaveState', parms.pbsg, parms.ref)) {
       String ref = parms.ref ? i(" Ref: ${parms.ref}") : ''
@@ -446,14 +418,13 @@ void pbsg_SaveState(Map parms) {
       String summary = "[${i(oldSummary)} → ${b(newSummary)}]"
       Boolean cntChanged = (oldCnt != newCnt)
       Boolean activeChanged = (STATE[DID()].active != pbsg.active)
-      STATE[DID()] = pbsg  // Save then reconcile (for now)
-    //-> isPbsgChanged('pbsg_SaveState #461 STATE UPDATED', pbsg, parms.ref)
-      // Reconcile VSWs
+      STATE[DID()] = pbsg
+      // Reconcile VSWs and pause to allow devices to reflect state changes.
       pbsg.buttonsList.each{ button ->
         updateVswState(button, (pbsg.active == button) ? 'on' : 'off', parms.ref)
       }
-      // Pause briefly to allow for devices to reflect state changes.
       pauseExecution(100)
+      // Begin Attribute Updates
       logTrace('pbsg_SaveState', [ "Updating jsonPbsg, ref: ${ref}",
         pbsg_StateHtml(pbsg),
         bMap(pbsg)
@@ -495,7 +466,6 @@ void pbsg_SaveState(Map parms) {
           descriptionText: cntDesc
         )
       }
-      // Update Related Attributes
       pruneOrphanedDevices()
     } else {
       logInfo('pbsg_SaveState', 'No changes to save or to publish.')
@@ -538,14 +508,12 @@ void commandProcessor() {  // Map parms
           String button = command.arg
           logTrace('commandProcessor', "case Activate for ${b(button)}.")
           pbsg_Activate(pbsg, button, command.ref)
-//-> isPbsgChanged('case Activate #543', pbsg, command.ref)
           pbsg_SaveState(pbsg: pbsg, ref: command.ref)
           break
         case 'Deactivate':
           String button = command.arg
           logTrace('commandProcessor', "case Deactivate for ${b(button)}.")
           pbsg_Deactivate(pbsg, button, command.ref)
-//-> isPbsgChanged('case Deactivate #550', pbsg, command.ref)
           pbsg_SaveState(pbsg: pbsg, ref: command.ref)
           break
         case 'Push':
@@ -565,7 +533,6 @@ void commandProcessor() {  // Map parms
                 pbsg.lifo.removeAll([pbsg.dflt])
                 pbsg.active = pbsg.dflt
               }
-//-> isPbsgChanged('case Push #570', pbsg, command.ref)
               pbsg_SaveState(pbsg: pbsg, ref: command.ref)
             }
           } else {
@@ -574,7 +541,6 @@ void commandProcessor() {  // Map parms
               if (pbsg.active) { pbsg.lifo.push(pbsg.active) }
               pbsg.lifo.removeAll([button])
               pbsg.active = button
-//-> isPbsgChanged('case Push #579', pbsg, command.ref)
               pbsg_SaveState(pbsg: pbsg, ref: command.ref)
             } else {
               logInfo('commandProcessor', [ "Ignoring 'Toggle ${b(button)}'",
@@ -627,7 +593,7 @@ String buttonState(String button) {
 }
 
 String pbsg_StateText(Map pbsg) {
-  // IMPORTANT:
+  // IMPORTANT
   //   LIFO push() and pop() are supported, *BUT* pushed items are appended
   //   (not prepended). See "reverse()" below, which compensates.
   String result
@@ -647,7 +613,7 @@ String pbsg_StateText(Map pbsg) {
 }
 
 String pbsg_StateHtml(Map pbsg) {
-  // IMPORTANT:
+  // IMPORTANT
   //   LIFO push() and pop() are supported, *BUT* pushed items are appended
   //   (not prepended). See "reverse()" below, which compensates.
   ArrayList table = []
@@ -664,7 +630,7 @@ String pbsg_StateHtml(Map pbsg) {
   return table ? table.join() : null
 }
 
-// Adjust In-Memory PBSG (without altering state)
+// METHODS THAT ADJUST THE IN-MEMORY PBSG (WITHOUT ALTERING STATE)
 
 void pbsg_Activate(Map pbsg, String button, String ref = null) {
   if (pbsg?.active == button) {
@@ -708,15 +674,16 @@ void pbsg_Deactivate(Map pbsg, String button, String ref) {
   }
 }
 
-// Manage VSWs and Implement VSW Methods
+// MANAGE VSWS AND IMPLEMENT VSW METHODS
 
 ChildDevW getOrCreateVswWithToggle(
   String pbsgName,
   String buttonName,
   Integer buttonPosition
 ) {
-  // Device Network Identifier (DNI) does not include white space.
-  // Device Names / Labels limit special characters to '_'.
+  // IMPORTANT
+  //   - Device Network Identifier (DNI) does not include white space.
+  //   - Device Names / Labels limit special characters to '_'.
   String dni = "${pbsgName}_${buttonName}"
   String deviveName = dni.replaceAll('_', ' ')
   ChildDevW d = getChildDevice(dni)
@@ -785,8 +752,6 @@ void updateVswState(String button, String value, String ref = null) {
     logError('updateVswState', 'Received null parameter "button"')
   }
 }
-
-// VSW SUPPORT
 
 String getButtonForVsw(DevW d) {
   return d.getDeviceNetworkId().tokenize('_')[1]

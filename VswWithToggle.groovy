@@ -46,34 +46,36 @@ metadata {
 
 void setButtonNameAndPosition(String buttonName, Integer buttonPosition) {
   // The PBSG parent device calls this method just after device creation.
-  // Capturing the device's button name and position simplifies subsequent
-  // interacton with the parent device.
+  // By capturing the device's button name and position, subsequent
+  // interacton with the parent device is simpler.
   state.buttonName = buttonName
   state.buttonPosition = buttonPosition
 }
 
-// COMMANDS FOR ADVERTISED CAPABILITIES
+// ADVERTISED CAPABILITIES
 
-void on() {
+void on() {                            // Per capability 'Switch'
   parent.activate(
     state.buttonName,
     "${this.device.getDeviceNetworkId()} on()"
   )
 }
 
-void off() {
+void off() {                           // Per capability 'Switch'
   parent.deactivate(
     state.buttonName,
     "${this.device.getDeviceNetworkId()} off()"
   )
 }
 
-void push(Map parms = null) {
+void push(Map parms = null) {          // Per capability 'Momentary'
   parent.push(
     state.buttonPosition,
     "${this.device.getDeviceNetworkId()} push()"
   )
 }
+
+// METHODS LEVERAGED BY PARENT PBSG
 
 void adjustLogLevel(String level) {
   setLogLevel(level)
@@ -88,8 +90,6 @@ void logInfo(String text) {
   // Parent speaks as child through this facility.
   logInfo('switch', text)
 }
-
-// EXPECT PARENT TO MANIPULATE THIS DEVICE
 
 void parse(ArrayList actions) {
   // This command expects actions (an ArrayList) of commands (Maps).

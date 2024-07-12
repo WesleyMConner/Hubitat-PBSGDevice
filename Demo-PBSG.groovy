@@ -12,9 +12,9 @@
  * implied.
  */
 
-//// WesMC.lUtils
-////   - The imports below support the methods in this library.
-////   - Groovy Linter generates NglParseError due to the Hubitat #include.
+// WesMC.lUtils
+//   - The imports below support the methods in this library.
+//   - Groovy Linter generates NglParseError due to the Hubitat #include.
 #include WesMC.lUtils
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
@@ -35,7 +35,7 @@ definition (
   iconX2Url: ''
 )
 
-//// GENERAL-PURPOSE EVENT HANDLER
+// DEMONSTRATION EVENT HANDLERS
 
 void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
@@ -44,11 +44,6 @@ void handle_numberOfButtons(Event e) {
       'handle_numberOfButtons',
       "${eventSender(e)}: ${e.descriptionText}"
     )
-  //
-  //    "Provider: ${eventSender(e)}",
-  //    "Ref: ${e.descriptionText}",
-  //    "${e.name}: ${b(val)}"
-  //  ])
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
   }
@@ -101,7 +96,7 @@ void solicitPbsgNames() {
       '- The names will be used to create PBSG devices',
       '- Use ⏎ to save your entry '
     ].join('<br/>'),
-    defaultValue: 'weekdays',  // HARDWIRE TEMPORARILY
+    defaultValue: 'weekdays',               //----> HARDWIRE TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: true
@@ -122,7 +117,7 @@ void solicitButtonNames(String prefix) {
   input(
     name: "${prefix}buttons",
     title: h3(header),
-    defaultValue: 'mon tue wed thu fri',  // HARDWIRE TEMPORARILY
+    defaultValue: 'mon tue wed thu fri',    //----> HARDWIRE TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: dynamic
@@ -147,8 +142,8 @@ void solicitDefaultButton(String prefix) {
     type: 'enum',
     multiple: false,
     options: [*getButtonNames(prefix), 'not_applicable'],
-    defaultValue: 'thu',  // HARDWIRE TEMPORARILY
     //defaultValue: defaultButton(prefix) ?: 'not_applicable',
+    defaultValue: 'thu',                    //----> HARDWIRE TEMPORARILY
     submitOnChange: isDynamic(),
     required: true
   )
@@ -190,7 +185,7 @@ void solicitPbsgConfig(String pbsgName) {
   }
 }
 
-//// SOLICIT PBSG ACTIONS AND BUILD AD HOC PBSG TEST SEQUENCES
+// SOLICIT PBSG ACTIONS AND BUILD AD HOC PBSG TEST SEQUENCES
 
 void solicitNextAction(String pbsgName) {
   String header = 'Add a Test Action'
@@ -223,6 +218,7 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
     name: "${pbsgName}_testSequence",
     title: h3(header),
     type: 'textarea',
+    //defaultValue: testSequenceJson,
     defaultValue: toJson([
       "mon_Activate",
       "wed_Activate",
@@ -241,8 +237,7 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
       "1_VswPush",
       "tue_Activate",
       "tue_Deactivate"
-    ]),  // HARDWIRE TEMPORARILY
-    //defaultValue: testSequenceJson,
+    ]),                                     //----> HARDWIRE TEMPORARILY
     required: true,
     width: 9,
     submitOnChange: isDynamic()
@@ -272,7 +267,7 @@ ArrayList getTestSequence(String pbsgName) {
   return result
 }
 
-//// SUPPORT FOR AD HOC PBSG TESTING
+// SUPPORT FOR AD HOC PBSG TESTING
 
 ArrayList getTestActions(String pbsgName) {
   // Develop Available Test Sequence Options
@@ -306,7 +301,7 @@ void buildTestSequence(String pbsgName, ArrayList testOptions) {
   solicitTestSequence(testSequenceJson, pbsgName)
 }
 
-//// DEFINE THREE DEMO DATA COLLECTION PAGES
+// DEFINE THREE DEMO DATA COLLECTION PAGES
 
 preferences {
   page(name: 'page1_CreatePBSGs', nextPage: 'page2_TestActions')
@@ -450,14 +445,11 @@ void exercisePbsg() {
   ArrayList pbsgNames = settings.pbsgNames?.tokenize(' ')
   // Build the PBSG and run
   pbsgNames.each { pbsgName ->
-    // CREATE THE PBSG INSTANCE
-    //   - Gather a PBSG configuration Map from data in settings.
-    //   - Alternately, provide a PBSG configuration by brute force.
-    //     Map config = [
-    //        buttons: ...,  // ArrayList of button names
-    //           dflt: ...,   // The default button name or null
-    //       instType: ...,  // 'pbsg' in most cases
-    //     ]
+    // Per target PBSG
+    //   - Create an empty PBSG instance
+    //   - Leverage the configPbsg() method to convey the structure.
+    //   - Issue available test actions to exercise the PBSG.
+    //   - Watch relevant Handlers to review resulting PBSG changes.
     if (pbsgName) {
       ChildDevW pbsg = getOrCreatePBSG(pbsgName)
       subscribeHandler(pbsg, 'numberOfButtons')
