@@ -84,24 +84,29 @@ Map TestBed1() {
       a.x = a.y = 'SOMETHING'
       paragraph "a: ${a}"
       */
-      Map a = [a: 'apple', b: 'banana', c: 'cantelope']
+      Map a = [a: 'apple', b: 'banana', c: 'cantelope', l: [1, 2, 3, 4]]
       paragraph "a: ${a}"
-      paragraph "-----"
+      paragraph "----> Create aDup"
       // Use findAll() to create a copy of Map a.
       Map aDup = a.findAll { k, v -> (k) }
       paragraph "aDup: ${aDup}"
-      paragraph "-----"
+      paragraph "----> Create b"
       Map b = [a: 'apricot', d: 'dragon fruit']
       paragraph "b: ${b}"
-      paragraph "-----"
+      paragraph "----> Overlay aDup with b"
       aDup << b
       paragraph "a: ${a}"
       paragraph "aDup w/ b: ${aDup}"
+      paragraph "----> Create c, prepending 'ITEM' to aDup"
       Map c = [first: 'ITEM', *:aDup]
       paragraph "a: ${a}"
       paragraph "b: ${b}"
       paragraph "aDup w/ b: ${aDup}"
       paragraph "c: ${c}"
+      paragraph "----> Remove 2 in l via aDup, is a insulated from the change? NO"
+      aDup.l.removeAll(2)
+      paragraph "a: ${a}"
+      paragraph "aDup w/ b: ${aDup}"
     }
     section {
     }

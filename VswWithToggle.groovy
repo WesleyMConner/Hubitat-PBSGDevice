@@ -75,6 +75,20 @@ void push(Map parms = null) {
   )
 }
 
+void adjustLogLevel(String level) {
+  setLogLevel(level)
+}
+
+void logTrace(String text) {
+  // Parent speaks as child through this facility.
+  logTrace('switch', text)
+}
+
+void logInfo(String text) {
+  // Parent speaks as child through this facility.
+  logInfo('switch', text)
+}
+
 // EXPECT PARENT TO MANIPULATE THIS DEVICE
 
 void parse(ArrayList actions) {

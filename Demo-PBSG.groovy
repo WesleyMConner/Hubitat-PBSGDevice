@@ -475,7 +475,7 @@ void exercisePbsg() {
         logLevel: 'TRACE'  // 'INFO'
       ]
       String jsonPrefs = toJson(prefs)
-      pbsg.configPbsg(jsonPrefs, 'Config PBSG using JSON')
+      pbsg.configPbsg(jsonPrefs, 'Demo-PBSG configuring PBSG using JSON')
       // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
       ArrayList testSeqList = getTestSequence(pbsgName)
       logTrace(
@@ -487,11 +487,11 @@ void exercisePbsg() {
       testSeqList?.eachWithIndex{ testAction, index ->
         String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}"
         String ref = "Demo-PBSG ${pbsgName} action ${index + 1} of ${actionCnt}"
-        logInfo('exercisePbsg', "${i(actionLabel)}: ${b(testAction)}")
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {
           String target = tokenizedAction[0]
           String action = tokenizedAction[1]
+          logInfo('exercisePbsg', "${i(actionLabel)}: ${b(action)} ${b(target)}")
           String reference = "${index}: ${testAction}"
           switch (action) {
             case 'Activate':
@@ -519,7 +519,9 @@ void exercisePbsg() {
               )
           }
         } else {
-          logError('exercisePbsg', "Unsuccessful tokenize of >${testAction}<")
+          logError(
+            'exercisePbsg',
+            "For ${i(actionLabel)} tokenize('_') failed for >${testAction}<.")
         }
       }
     } else {
