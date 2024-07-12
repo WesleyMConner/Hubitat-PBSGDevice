@@ -40,11 +40,15 @@ definition (
 void handle_numberOfButtons(Event e) {
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
-    logInfo('handle_numberOfButtons', ['',
-      "Provider: ${eventSender(e)}",
-      "Ref: ${e.descriptionText}",
-      "${e.name}: ${b(val)}"
-    ])
+    logInfo(
+      'handle_numberOfButtons',
+      "${eventSender(e)}: ${e.descriptionText}"
+    )
+  //
+  //    "Provider: ${eventSender(e)}",
+  //    "Ref: ${e.descriptionText}",
+  //    "${e.name}: ${b(val)}"
+  //  ])
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
   }
@@ -63,9 +67,7 @@ void handle_pushed(Event e) {
 
 void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
-    //Map pbsg = fromJson(e.value)
     Map pbsg = parseJson(e.value)
-    //logInfo('handle_jsonPbsg', getChildDevice(e.displayName).pbsg_StateHtml(pbsg))
     logInfo('handle_jsonPbsg', [ "${eventSender(e)}: ${e.descriptionText}",
       (getChildDevice(e.displayName).pbsg_StateHtml(pbsg)),
       bMap(pbsg)
@@ -77,9 +79,7 @@ void handle_jsonPbsg(Event e) {
 
 void handle_active(Event e) {
   if (e.name == 'active') {
-    logInfo('handle_active', [ "${eventSender(e)}: ${e.descriptionText}",
-      "${e.name}: ${b(e.value)}"
-    ])
+    logInfo('handle_active', "${eventSender(e)}: ${e.descriptionText}")
   } else {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
   }
@@ -286,8 +286,6 @@ ArrayList getTestActions(String pbsgName) {
     testActions << "${b}_Deactivate"
     testActions << "${buttonToNumber[b]}_VswPush"
   }
-  //-> testActions.add('Activate_last_active')
-  //testActions << 'No more actions'
   return testActions
 }
 
@@ -435,12 +433,6 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
   subscribe(issuer, attribute, hdlr, ['filterEvents': true])
 }
 
-//void pause(Long waitMs) {
-//  logInfo('pause', alert("Wait ${waitMs}ms for logging and events"))
-//  pauseExecution(waitMs)
-//  logInfo('pause', alert("Resuming after ${waitMs}ms pause."))
-//}
-
 void initialize() {
   // Called on hub startup (per capability "Initialize").
   exercisePbsg()
@@ -467,13 +459,11 @@ void exercisePbsg() {
     //       instType: ...,  // 'pbsg' in most cases
     //     ]
     if (pbsgName) {
-      //-> logWarn('exercisePbsg', "Creating pbsg ${b(pbsgName)}.")
       ChildDevW pbsg = getOrCreatePBSG(pbsgName)
       subscribeHandler(pbsg, 'numberOfButtons')
       subscribeHandler(pbsg, 'pushed')
       subscribeHandler(pbsg, 'jsonPbsg')
       subscribeHandler(pbsg, 'active')
-      //----> subscribeHandler(pbsg, 'jsonLifo')
       // Assemble solicited configure data (for the current PBSG) and use it to
       // configure the current PBSG via 'pbsg.parse(String json)'.
       logInfo('exercisePbsg', "Configure PBSG ${b(pbsgName)}")
@@ -482,7 +472,7 @@ void exercisePbsg() {
         buttons: getButtonNames(prefix).join(' '),
         dflt: defaultButton(prefix),
         instType: 'pbsg',
-        logLevel: 'TRACE'
+        logLevel: 'TRACE'  // 'INFO'
       ]
       String jsonPrefs = toJson(prefs)
       pbsg.configPbsg(jsonPrefs, 'Config PBSG using JSON')
@@ -517,15 +507,9 @@ void exercisePbsg() {
               pbsg.simulateVswOff(target, ref)
               break
             case 'VswPush':
-              Integer buttonNumber = safeParseInt(target)
+              Integer buttonNumber = safeParseInt(target)  // 1..N not 0 based.
               ArrayList buttonsList = getButtonNames(prefix)
               String button = buttonsList[buttonNumber - 1]
-  //-> logDebug('exercisePbsg', ['VswPush',
-  //->   "target: ${target} ${getObjectClassName(target)}",
-  //->   "buttonNumber: ${buttonNumber}",
-  //->   "buttonsList: ${buttonsList}",
-  //->   "button: ${button}"
-  //-> ])
               pbsg.push(buttonNumber, ref)
               break
             default:
@@ -547,26 +531,13 @@ void exercisePbsg() {
   ArrayList expectedDNIs = []
   pbsgNames.each { pbsgName -> expectedDNIs.add(pbsgName) }
   ArrayList orphanedDNIs = childDNIs.minus(expectedDNIs)
-  logTrace('initialize', ['',
+  logTrace('exercisePbsg', ['',
     "   ${b('childDNIs')}: ${childDNIs}",
     "${b('expectedDNIs')}: ${expectedDNIs}",
     "${b('orphanedDNIs')}: ${orphanedDNIs}"
   ])
   orphanedDNIs.each{ dni ->
-    logWarn('initialize', "Deleting orphaned device w/ DNI: ${b(dni)}")
+    logWarn('exercisePbsg', "Deleting orphaned device w/ DNI: ${b(dni)}")
     deleteChildDevice(dni)
   }
-  // At this point, the App could exit before the results of running the
-  // tests have been seen by the handlers.
-  /*
-  Integer maxLoops = 10
-  Integer sleepMs = 1000
-  Integer loopCounter = 0
-  while (loopCounter++ < maxLoops) {
-    pauseExecution(sleepMs)
-    // timeToday is available in Apps but not Drivers
-    //logInfo('initialize', "${loopCounter}: ${timeToday('Thh:mm:ss')}")
-    logInfo('initialize', "Loop Counter: ${loopCounter}")
-  }
-  */
 }
