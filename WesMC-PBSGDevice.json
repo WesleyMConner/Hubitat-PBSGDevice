@@ -1,0 +1,28 @@
+{
+  "packageName": "WesMC-PBSGDevice",
+  "author": "Wesley M. Conner",
+  "version": "0.1.0",
+  "releaseNotes": "Initial release of PBSG Device via HPM",
+  "dateReleased": "2024-07-14",
+  "minimumHEVersion": "2.3.9.158",
+  "documentationLink": "https://github.com/WesleyMConner/Hubitat-PBSGDevice/blob/main/README.adoc",
+  "licenseFile": "https://github.com/WesleyMConner/Hubitat-PBSGLibrary/blob/main/LICENSE",
+  "tags": [
+    "Buttons",
+    "Lights & Switches",
+    "Misc. Devices",
+    "Tools & Utilities"
+  ],
+  "bundles" : [
+		{
+      "id": "0f1c3181-1c96-4b88-bf48-8120bde75648",
+      "name": "WesMC-PBSGDevice-Bundle",
+      "namespace": "WesMC",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/WesleyMConner/Hubitat-PBSGDevice/main/WesMC-PBSGDevice-Bundle.zip",
+      "description": "Virtual keypad (Push Button Switch Group) w/ mutually-exclusive buttons, an optional default button and synchronized child virtual switches.",
+      "descriptive": "<a href='https://raw.githubusercontent.com/WesleyMConner/Hubitat-PBSGDevice/main/README.adoc'>",
+      "required": true
+		}
+	]
+}

@@ -1,3 +1,7 @@
+// IF YOU DO NOT SEE FORMATTED OUTPUT.
+// CONSIDER INSTALLING AN ASCIIDOC BROWSER EXTENSION:
+// https://docs.asciidoctor.org/browser-extension/install/
+
 :table-caption!:
 = PushButton Switch Group (PGSG)
 
@@ -65,7 +69,7 @@ TBD
 
 lPBSG.groovy::
 Hubitat functions that can be incorporated into downstream applications
-via `#include wesmc.lPBSG`. The functions collectively implement
+via `#include WesMC.lPBSG`. The functions collectively implement
 *PushButton Switch Group (PBSG)* instances where each PBSG instance:
 
 * Creates and manages a group of Virtual Switches (VSWs) - one per _pushbutton_.

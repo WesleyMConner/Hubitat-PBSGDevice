@@ -1,3 +1,7 @@
+// IF YOU DO NOT SEE FORMATTED OUTPUT.
+// CONSIDER INSTALLING AN ASCIIDOC BROWSER EXTENSION:
+// https://docs.asciidoctor.org/browser-extension/install/
+
 :table-caption!:
 
 = PBSG Structure

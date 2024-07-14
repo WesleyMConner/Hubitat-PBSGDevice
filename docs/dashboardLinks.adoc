@@ -1,3 +1,7 @@
+// IF YOU DO NOT SEE FORMATTED OUTPUT.
+// CONSIDER INSTALLING AN ASCIIDOC BROWSER EXTENSION:
+// https://docs.asciidoctor.org/browser-extension/install/
+
 = Dashboard Links
 The following links were found in http://192.168.8.94/ui2/dashboard2[WHA Dashboard], which content is available in `dashboardSample.html`.
 
