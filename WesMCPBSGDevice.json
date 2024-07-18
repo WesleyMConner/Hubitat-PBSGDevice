@@ -21,7 +21,6 @@
       "category": "Control",
       "location": "https://raw.githubusercontent.com/WesleyMConner/Hubitat-PBSGDevice/main/WesMCPBSGDevice_Bundle.zip",
       "description": "A virtual keypad w/ mutually-exclusive buttons, an optional default button and synchronized child virtual switches.",
-      "descriptive": "<a href='https://raw.githubusercontent.com/WesleyMConner/Hubitat-PBSGDevice/main/README.adoc'>",
       "required": true
 		}
 	]

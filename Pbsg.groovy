@@ -22,14 +22,14 @@ import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
 import groovy.json.JsonOutput as JsonOutput
 import groovy.json.JsonSlurper as JsonSlurper
+import groovy.transform.Field
 import java.lang.Math as Math
 import java.lang.Object as Object
+import java.util.concurrent.ConcurrentHashMap
 
 // Imports specific to this file.
-import groovy.transform.Field
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.SynchronousQueue
 
 @Field static ConcurrentHashMap<Long, Map> STATE = [:]
@@ -42,7 +42,7 @@ metadata {
     name: 'PBSG',
     namespace: 'WesMC',
     author: 'Wesley M. Conner',
-    description: """Virtual PushButtonSwitchGroup (PBSG) Device""",
+    description: "Virtual PushButtonSwitchGroup (PBSG) Device",
     category: '',   // As of Q2'24 Not used
     iconUrl: '',    // As of Q2'24 Not used
     iconX2Url: '',  // As of Q2'24 Not used
@@ -57,7 +57,7 @@ metadata {
                                  // Commands: push(number)
 
     // Commands not implied by a Capability
-    command 'configPbsg', [
+    command 'config', [
       [ name: 'jsonPrefs', type: 'String', description: 'Map of prefs serialized as JSON']
     ]
     command 'activate', [
@@ -105,7 +105,7 @@ metadata {
   }
 }
 
-// System Device Management Methods
+// SYSTEM DEVICE MANAGEMENT METHODS
 
 void installed() {
   // Called when a bare device is first constructed.
@@ -202,7 +202,7 @@ Integer buttonNameToPushed(String button, ArrayList buttons) {
 
 // Externally-Exposed PBSG Commands
 
-void configPbsg(String jsonPrefs, String ref = '') {
+void config(String jsonPrefs, String ref = '') {
   // If the configuration change alters the PBSG structure:
   //   - Rebuild the PBSG to the new structure
   //   - Update the PBSG version.
@@ -496,6 +496,8 @@ void commandProcessor() {  // Map parms
   //   - If the versions agree, the command is executed.
   //   - If the command is older, it is considered 'stale' and dropped.
   //   - If the command is newer, an error is thrown.
+  Long l1 = device?.id as Long
+  long l2 = app?.id ?: (device?.id as Long)
   logInfo('commandProcessor', 'QUEUE HANDLER LOOP STARTED')
   while (1) {
     logTrace('commandProcessor', 'Awaiting next take().')
@@ -598,7 +600,7 @@ String pbsg_StateText(Map pbsg) {
   //   (not prepended). See "reverse()" below, which compensates.
   String result
   if (pbsg) {
-    ArrayList list = [ "${devHued(device)}: "]
+    ArrayList list = [ "${hued()}: "]
     list << (pbsg.active ? buttonState(pbsg.active) : 'null')
     list << ' ← '
     pbsg.lifo?.reverse().each { button ->
@@ -607,7 +609,7 @@ String pbsg_StateText(Map pbsg) {
     list << "<b>LIFO</b>"
     result = list.join()
   } else {
-    result = "${devHued(device)}: null"
+    result = "${hued()}: null"
   }
   return result
 }
@@ -700,7 +702,7 @@ ChildDevW getOrCreateVswWithToggle(
     )
     logWarn(
       'getOrCreateVswWithToggle',
-      "Created new VswWithToggle instance: ${devHued(d)}"
+      "Created new VswWithToggle instance: ${hued(d)}"
     )
   }
   d.adjustLogLevel(settings.logLevel)  // Child logLevel follows parent.
@@ -761,7 +763,7 @@ ChildDevW getVswForButton(String button) {
   String dni = "${device.getLabel()}_${button}"
   ChildDevW d = getChildDevice(dni)
   if (!d) {
-    logError('getVswForButton', "No Device (${devHued(d)}) for button (${b(button)}).")
+    logError('getVswForButton', "No Device (${hued(d)}) for button (${b(button)}).")
   }
   return d
 }

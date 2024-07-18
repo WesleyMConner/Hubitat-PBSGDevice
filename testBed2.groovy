@@ -15,12 +15,20 @@
 // For reference:
 //   Unicode 2190 ← LEFTWARDS ARROW
 //   Unicode 2192 → RIGHTWARDS ARROW
+
+#include WesMC.lUtils
+import com.hubitat.app.ChildDeviceWrapper as ChildDevW
+import com.hubitat.app.DeviceWrapper as DevW
+import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
+import groovy.json.JsonOutput as JsonOutput
+import groovy.json.JsonSlurper as JsonSlurper
+import groovy.transform.Field
+import java.lang.Math as Math
+import java.lang.Object as Object
+import java.util.concurrent.ConcurrentHashMap
 
 // The Groovy Linter generates NglParseError on Hubitat #include !!!
-#include WesMC.lUtils
 
 definition (
   name: 'TestBed2',
@@ -40,21 +48,25 @@ Map TestBed2() {
   return dynamicPage(
     name: 'TestBed2',
     title: 'TestBed2',
+    install: true,
     uninstall: true
   ) {
     app.updateLabel("TestBed2 (${app.id})")
-    section{
-      // GIVEN A FIXED, ONE-LAYER MAP
-      Map w = [active: 'one', lifo: ['two', 'three', 'four']]
-      paragraph "${b('Given Map')}: ${w}"
-
-      // CUSTOM ENCODE THE MAP AS A STRING
-      String x = "active:${w.active}^lifo:${w.lifo}"
-      paragraph "${b('Brute Force Encode It')}: ${x}"
-
-      // RE-HYDRATE THE MAP IN ONE STEPS
-      Map m = x.tokenize('^').collectEntries { e -> e.tokenize(':') }
-      paragraph "${b('Hydration')}: ${m}"
+    section {
+      paragraph([
+        h1('Header1'),
+        b('bold'),
+        bi('bold italic')
+      ].join('<br/>'))
     }
   }
+}
+
+void installed() {
+  setLogLevel('TRACE')
+  logInfo('installed', [
+    h1('Header1'),
+    b('bold'),
+    bi('bold italic')
+  ].join('<br/>'))
 }

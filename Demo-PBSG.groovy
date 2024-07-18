@@ -22,8 +22,10 @@ import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
 import groovy.json.JsonOutput as JsonOutput
 import groovy.json.JsonSlurper as JsonSlurper
+import groovy.transform.Field
 import java.lang.Math as Math
 import java.lang.Object as Object
+import java.util.concurrent.ConcurrentHashMap
 
 definition (
   name: 'Demo-PBSG',
@@ -38,11 +40,12 @@ definition (
 // DEMONSTRATION EVENT HANDLERS
 
 void handle_numberOfButtons(Event e) {
+  logWarn('handle_numberOfButtons', "${eventDetails(e)}")
   if (e.name == 'numberOfButtons') {
     Integer val = e.value.toInteger()
     logInfo(
       'handle_numberOfButtons',
-      "${eventSender(e)}: ${e.descriptionText}"
+      "${hued(e)}: ${e.descriptionText}"
     )
   } else {
     logError('handle_numberOfButtons', "Unexpected event: ${eventDetails(e)}")
@@ -52,7 +55,7 @@ void handle_numberOfButtons(Event e) {
 void handle_pushed(Event e) {
   if (e.name == 'pushed') {
     Integer val = e.value.toInteger()
-    logInfo('handle_pushed', ["${eventSender(e)}: ${e.descriptionText}",
+    logInfo('handle_pushed', ["${hued(e)}: ${e.descriptionText}",
       "${e.name} = ${b(val)}"
     ])
   } else {
@@ -63,7 +66,7 @@ void handle_pushed(Event e) {
 void handle_jsonPbsg(Event e) {
   if (e.name == 'jsonPbsg') {
     Map pbsg = parseJson(e.value)
-    logInfo('handle_jsonPbsg', [ "${eventSender(e)}: ${e.descriptionText}",
+    logInfo('handle_jsonPbsg', [ "${hued(e)}: ${e.descriptionText}",
       (getChildDevice(e.displayName).pbsg_StateHtml(pbsg)),
       bMap(pbsg)
     ])
@@ -74,7 +77,7 @@ void handle_jsonPbsg(Event e) {
 
 void handle_active(Event e) {
   if (e.name == 'active') {
-    logInfo('handle_active', "${eventSender(e)}: ${e.descriptionText}")
+    logInfo('handle_active', "${hued(e)}: ${e.descriptionText}")
   } else {
     logError('handle_active', "Unexpected event: ${eventDetails(e)}")
   }
@@ -93,14 +96,22 @@ void solicitPbsgNames() {
       h3('Enter one or more PBSG Names'),
       '- Separate names with spaces',
       "- Avoid special characters in names ('_' is allowed)",
-      '- The names will be used to create PBSG devices',
-      '- Use ⏎ to save your entry '
+      '- The names will be used to create PBSG devices'
     ].join('<br/>'),
     defaultValue: 'weekdays',               //----> HARDWIRE TEMPORARILY
     type: 'text',
     required: true,
     submitOnChange: true
   )
+  /*
+  paragraph alert([b('IMPORTANT:'),
+    "Use ⏎ to save your PBSG name(s).",
+    'Make sure you:',
+    bullet2('Populate PBSG button names.'),
+    bullet2("Select the PBSG's default button."),
+    "${b('BEFORE')} clicking ${b('Next')}."
+  ].join('<br/>'))
+  */
 }
 
 ArrayList getPbsgNames() {
@@ -256,7 +267,6 @@ ArrayList getTestSequence(String pbsgName) {
     String settingsKey = "${pbsgName}_testSequence"
     String value = settings."${settingsKey}"
     if (value) {
-      //result = fromJson(value)
       result = parseJson(value)
     } else {
       logWarn('getTestSequence', "No setting ${settingsKey} yet")
@@ -402,7 +412,7 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
   // Device Names (exposed to Alexa ...) DO NOT include special characters.
   ChildDevW d = getChildDevice(dni)
   if (d) {
-    logTrace('getOrCreatePBSG', "Using existing ${devHued(d)}")
+    logTrace('getOrCreatePBSG', "Using existing ${hued(d)}")
   } else {
     d = addChildDevice(
       'WesMC',   // namespace
@@ -414,7 +424,7 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
         label: name          // "PBSG <pbsgName>"
       ]
     )
-    logWarn('getOrCreatePBSG', "Created new ${devHued(d)}")
+    logWarn('getOrCreatePBSG', "Created new ${hued(d)}")
   }
   return d
 }
@@ -423,7 +433,7 @@ void subscribeHandler(ChildDevW issuer, String attribute) {
   String hdlr = "handle_${attribute}"
   logTrace(
     'subscribeHandler',
-    "Subscribing ${b(hdlr)} to ${devHued(issuer)} events."
+    "Subscribing ${b(hdlr)} to ${hued(issuer)} events."
   )
   subscribe(issuer, attribute, hdlr, ['filterEvents': true])
 }
@@ -447,7 +457,7 @@ void exercisePbsg() {
   pbsgNames.each { pbsgName ->
     // Per target PBSG
     //   - Create an empty PBSG instance
-    //   - Leverage the configPbsg() method to convey the structure.
+    //   - Leverage the config() method to convey the structure.
     //   - Issue available test actions to exercise the PBSG.
     //   - Watch relevant Handlers to review resulting PBSG changes.
     if (pbsgName) {
@@ -467,7 +477,7 @@ void exercisePbsg() {
         logLevel: 'TRACE'  // 'INFO'
       ]
       String jsonPrefs = toJson(prefs)
-      pbsg.configPbsg(jsonPrefs, 'Demo-PBSG configuring PBSG using JSON')
+      pbsg.config(jsonPrefs, 'Demo-PBSG configuring PBSG using JSON')
       // BUILD AND RUN THE SOLICITED TEST SEQUENCES.
       ArrayList testSeqList = getTestSequence(pbsgName)
       logTrace(
@@ -477,7 +487,7 @@ void exercisePbsg() {
       Integer actionCnt = testSeqList.size()
       // Call the appropriate PBSG method per Test Action.
       testSeqList?.eachWithIndex{ testAction, index ->
-        String actionLabel = "${devHued(pbsg)} action ${index + 1} of ${actionCnt}"
+        String actionLabel = "${hued(pbsg)} action ${index + 1} of ${actionCnt}"
         String ref = "Demo-PBSG ${pbsgName} action ${index + 1} of ${actionCnt}"
         ArrayList tokenizedAction = testAction.tokenize('_')
         if (tokenizedAction.size() == 2) {

@@ -20,8 +20,10 @@ import com.hubitat.app.InstalledAppWrapper as InstAppW
 import com.hubitat.hub.domain.Event as Event
 import groovy.json.JsonOutput as JsonOutput
 import groovy.json.JsonSlurper as JsonSlurper
+import groovy.transform.Field
 import java.lang.Math as Math
 import java.lang.Object as Object
+import java.util.concurrent.ConcurrentHashMap
 
 metadata {
   definition(

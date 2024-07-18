@@ -43,8 +43,6 @@ A button (from the buttons list) that becomes active if no other PBSG button is 
 
 === Advanced device features include ...
 
-* Integration with LUX sensors
-* Integration with Motion sensors
 * A companion demonstration application that illustrates device creation AND facilitates automatically-generated test scripts.
 * A custom dashboard cell (FUTURE)
 
@@ -60,83 +58,6 @@ The structure of a PBSG can be defined:
 
 . Using the device drilldown page in the Hubitat GUI.
 . In code using available API calls.
-
-== What Components are Provided ?
-
-TBD
-
-== PARKED
-
-lPBSG.groovy::
-Hubitat functions that can be incorporated into downstream applications
-via `#include WesMC.lPBSG`. The functions collectively implement
-*PushButton Switch Group (PBSG)* instances where each PBSG instance:
-
-* Creates and manages a group of Virtual Switches (VSWs) - one per _pushbutton_.
-* Turns off peer VSWs when one of the participating VSWs is turned on.
-* Turns on a default VSW (if specified) when no participating VSW is turned on.
-* Provides a `turnOnPrior()` method to restore the last active VSW.
-
-Demo-PBSG.groovy::
-Hubitat-compatible application source code that illustrates:
-
-* Creating PBSG instances via a GUI.
-* Creating PBSG instances via a configuration Map.
-* Pushbutton methods and callbacks.
-
-lPBSG.zip::
-A _Hubitat Bundle_ for installing the `lPBSG.groovy` Hubitat library and the
-`Demo-PBSG.groovy` Hubitat application.
-
-packageManifest.json::
-Provided to install the lPBSG.zip bundle via the moniker `WesMC-PBSGLibrary` in
-https://hubitatpackagemanager.hubitatcommunity.com/[Hubitat Package Manager (HPM)].
-
-== Creating PBSG Instances
-The `Demo-PBSG` application illustrates how PBSG instances can be created
-(1) by soliciting data via an Application user interfaces or (2) by providing
-in-kind data via a configuration Map instance.
-
-== Rationale for Technology Choices
-
-=== Use of a Callback Function in lieu of emitting an Event
-TBD
-
-=== One Child VSW per PBSG "Button"
-
-PROS::
-
-* Unlike pushable buttons or scenes, VSWs can be turned on|off by
-Alexa, Google Home, AirPlay, Hubitat rules, peer applications, etc.
-
-CONS::
-
-* At scale, creating several PBSG instances (each with
-fully-independent buttons) results in a plethora of VSWs. As of Q2'24, newly
-created VSWs have `Enable debug logging` and `Enable descriptionText logging`
-enabled with no API for creating quieter VSWs.
-
-=== Each PBSG Instance Name has a top-level Hubitat State Map Entry
-
-PROS::
-
-* Each PBSG instance is an independent Map - which can be treated like an
-instance of a class (even though operating in Hubitat's sandboxed environment).
-
-* Operations on a PBSG instance are efficient thanks to the use of atomicState
-and atomicState.updateMapValue(...).
-
-* Downstream pseudo-classes can be created by expanding the keys in a PBSG's
-instance Map. For example: Room's may have mutually-independent scenes where
-each Room instance is a PBSG instance with extra keys and methods that operate
-on those keys.
-
-CONS::
-
-* PBSG Names must be sufficiently unique to avoid collisions in the App's
-state|atomicState.
-
-== OTHER STUFF
 
 === OVERVIEW
 .Conceptually, a PBSG has:
@@ -175,14 +96,6 @@ turned off button is the "last in" - facilitating the "activateLastActive" comma
        ]
 ----
 
-.VERY IMPORTANT
-----
-     The ArrayList implementation of "lifo" is inverted !!!
-       - push() is expected to PREPEND an item which pop() retrieves
-       - Instead push() APPENDS an item which pop() retrieves
-     The 'display' String provides a visual summary active & lifo
-----
-
 == USAGE OF CONCURRENT HASH MAP
 
 === Competition for PBSG static data
@@ -201,5 +114,4 @@ at key device.idAsLong.
 ** To abbreviate 'concurrentState', 'ccs' is used.
 ** Treatment wrt the following is TBD:
 
-NOTE: The ConcurrentHashMap `perPbsgState` is used in lieu of `state`
-or `atomicState`.
+NOTE: The ConcurrentHashMap `perPbsgState` is used in lieu of `state` or `atomicState`.
