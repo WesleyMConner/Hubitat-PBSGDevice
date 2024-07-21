@@ -12,10 +12,10 @@
  * implied.
  */
 
-// WesMC.lUtils
+// Wmc.WmcUtilsLib_1.0.0
 //   - The imports below support library methods.
 //   - Expect a Groovy Linter 'NglParseError' per Hubitat #include.
-#include WesMC.lUtils
+#include Wmc.WmcUtilsLib_1.0.0
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -40,7 +40,7 @@ Long DID() { return device.idAsLong }
 metadata {
   definition(
     name: 'PBSG',
-    namespace: 'WesMC',
+    namespace: 'Wmc',
     author: 'Wesley M. Conner',
     description: "Virtual PushButtonSwitchGroup (PBSG) Device",
     category: '',   // As of Q2'24 Not used
@@ -691,7 +691,7 @@ ChildDevW getOrCreateVswWithToggle(
   ChildDevW d = getChildDevice(dni)
   if (!d) {
     d = addChildDevice(
-      'WesMC',               // Device namespace
+      'Wmc',               // Device namespace
       'VswWithToggle',       // Device type
       dni,
       [

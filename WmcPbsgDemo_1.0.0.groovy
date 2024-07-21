@@ -12,10 +12,10 @@
  * implied.
  */
 
-// WesMC.lUtils
+// Wmc.WmcUtilsLib_1.0.0
 //   - The imports below support the methods in this library.
 //   - Groovy Linter generates NglParseError due to the Hubitat #include.
-#include WesMC.lUtils
+#include Wmc.WmcUtilsLib_1.0.0
 import com.hubitat.app.ChildDeviceWrapper as ChildDevW
 import com.hubitat.app.DeviceWrapper as DevW
 import com.hubitat.app.InstalledAppWrapper as InstAppW
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 definition (
   name: 'Demo-PBSG',
-  namespace: 'WesMC',
+  namespace: 'Wmc',
   author: 'Wesley M. Conner',
   description: 'Demonstrate PushButtonSwitchGroup (PBSG) Functionality',
   singleInstance: true,
@@ -98,20 +98,18 @@ void solicitPbsgNames() {
       "- Avoid special characters in names ('_' is allowed)",
       '- The names will be used to create PBSG devices'
     ].join('<br/>'),
-    defaultValue: 'weekdays',               //----> HARDWIRE TEMPORARILY
+    // defaultValue: 'weekdays',  // USED FOR ITERATIVE TESTING !
     type: 'text',
     required: true,
     submitOnChange: true
   )
-  /*
+
   paragraph alert([b('IMPORTANT:'),
     "Use ⏎ to save your PBSG name(s).",
-    'Make sure you:',
+    "Then (${b('BEFORE')} clicking ${b('Next')}):",
     bullet2('Populate PBSG button names.'),
-    bullet2("Select the PBSG's default button."),
-    "${b('BEFORE')} clicking ${b('Next')}."
+    bullet2("Select the PBSG's default button.")
   ].join('<br/>'))
-  */
 }
 
 ArrayList getPbsgNames() {
@@ -128,7 +126,7 @@ void solicitButtonNames(String prefix) {
   input(
     name: "${prefix}buttons",
     title: h3(header),
-    defaultValue: 'mon tue wed thu fri',    //----> HARDWIRE TEMPORARILY
+    // defaultValue: 'mon tue wed thu fri',  // USED FOR ITERATIVE TESTING !
     type: 'text',
     required: true,
     submitOnChange: dynamic
@@ -153,8 +151,8 @@ void solicitDefaultButton(String prefix) {
     type: 'enum',
     multiple: false,
     options: [*getButtonNames(prefix), 'not_applicable'],
-    //defaultValue: defaultButton(prefix) ?: 'not_applicable',
-    defaultValue: 'thu',                    //----> HARDWIRE TEMPORARILY
+    defaultValue: defaultButton(prefix) ?: 'not_applicable',
+    //defaultValue: 'thu',  // USED FOR ITERATIVE TESTING !
     submitOnChange: isDynamic(),
     required: true
   )
@@ -229,8 +227,9 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
     name: "${pbsgName}_testSequence",
     title: h3(header),
     type: 'textarea',
-    //defaultValue: testSequenceJson,
-    defaultValue: toJson([
+    defaultValue: testSequenceJson,
+    /*
+    defaultValue: toJson([  // USED FOR ITERATIVE TESTING !
       "mon_Activate",
       "wed_Activate",
       "wed_Deactivate",
@@ -248,7 +247,8 @@ void solicitTestSequence(String testSequenceJson, String pbsgName) {
       "1_VswPush",
       "tue_Activate",
       "tue_Deactivate"
-    ]),                                     //----> HARDWIRE TEMPORARILY
+    ]),
+    */
     required: true,
     width: 9,
     submitOnChange: isDynamic()
@@ -415,7 +415,7 @@ ChildDevW getOrCreatePBSG(String pbsgName) {
     logTrace('getOrCreatePBSG', "Using existing ${hued(d)}")
   } else {
     d = addChildDevice(
-      'WesMC',   // namespace
+      'Wmc',   // namespace
       'PBSG',    // typeName
       dni,       // Device Network Identifier (<pbsgName>_<button>)
       [
